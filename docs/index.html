@@ -4,172 +4,202 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>AutoClip</title>
-<meta name="description" content="AutoClip transforme tes clips Medal de Valorant en montages TikTok calés sur la musique. Gratuit, sur ton PC.">
+<meta name="description" content="AutoClip transforme tes clips Medal de Valorant en montages TikTok calés sur le beat. Gratuit, sur Windows.">
 <link rel="icon" href="icone.png">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Unbounded:wght@700;800&display=swap">
 <style>
   :root {
-    --fond: #0e0f13; --carte: #171920; --carte2: #1f222b; --bord: #2a2e3a;
-    --texte: #e9eaf0; --doux: #9aa0b4; --rose: #ff3d6e; --cyan: #25f4ee; --patreon: #ff424d;
+    --fond: #0c0e0b; --surface: #161a14; --elevee: #1f241c; --bord: #2a3125;
+    --texte: #f4f5f7; --doux: #9aa0ad; --lime: #c6ff3d; --lavande: #8b8cff; --or: #ffa63d;
   }
   * { box-sizing: border-box; }
   [hidden] { display: none !important; }
-  html, body { margin: 0; background: var(--fond); color: var(--texte); font: 17px/1.55 system-ui, -apple-system, "Segoe UI", sans-serif; }
-  a { color: inherit; }
-  .page { max-width: 1080px; margin: 0 auto; padding: 0 16px; }
-  nav { display: flex; align-items: center; justify-content: space-between; padding: 18px 0; gap: 12px; }
-  .logo { font-weight: 800; font-size: 22px; letter-spacing: -.02em; display: flex; align-items: center; gap: 10px; text-decoration: none; }
-  .logo img { width: 32px; height: 32px; border-radius: 8px; }
-  .logo span { background: linear-gradient(90deg, var(--cyan), var(--rose)); -webkit-background-clip: text; background-clip: text; color: transparent; }
-  .nav-liens { display: flex; gap: 8px; }
-  .btn { display: inline-flex; align-items: center; justify-content: center; gap: 8px; padding: 14px 22px; border-radius: 14px;
-    font-weight: 700; text-decoration: none; border: 1px solid var(--bord); background: var(--carte2); cursor: pointer; white-space: nowrap; }
-  .btn.petit { padding: 9px 14px; font-size: 15px; border-radius: 11px; }
-  .btn.principal { background: linear-gradient(90deg, var(--rose), #ff6a3d); border: 0; color: #fff; }
-  .btn.patreon { background: var(--patreon); border: 0; color: #fff; }
-  .btn:focus-visible { outline: 3px solid var(--cyan); outline-offset: 2px; }
+  html, body { margin: 0; background: var(--fond); color: var(--texte); font: 17px/1.55 Inter, system-ui, "Segoe UI", sans-serif; }
+  a { color: var(--lavande); }
+  .page { max-width: 1160px; margin: 0 auto; padding: 0 20px; }
+  .titre { font-family: Unbounded, Inter, sans-serif; font-weight: 800; letter-spacing: -0.03em; }
+  nav { display: flex; flex-wrap: wrap; align-items: center; gap: 16px; padding: 22px 0; }
+  .logo { display: flex; align-items: center; gap: 10px; color: var(--texte); text-decoration: none; font-size: 20px; }
+  .logo b { color: var(--lime); }
+  .nav-liens { display: flex; flex-wrap: wrap; gap: 22px; margin-left: auto; font-size: 15px; }
+  .nav-liens a { color: var(--doux); text-decoration: none; }
+  .nav-liens a:hover { color: var(--texte); }
+  .btn { display: inline-flex; flex-direction: column; align-items: center; justify-content: center; padding: 14px 26px; border-radius: 999px;
+    font-weight: 700; text-decoration: none; border: 1px solid var(--bord); background: var(--elevee); color: var(--texte); white-space: nowrap; }
+  .btn small { font-size: 12px; font-weight: 500; opacity: .8; }
+  .btn.petit { padding: 9px 18px; font-size: 14px; }
+  .btn.action { background: var(--lime); border-color: var(--lime); color: var(--fond); box-shadow: 0 0 24px rgba(198,255,61,.25); }
+  .btn.contour { background: transparent; border-color: var(--lavande); color: var(--lavande); }
+  .btn.pro { background: var(--or); border-color: var(--or); color: var(--fond); }
+  .btn:focus-visible { outline: 3px solid var(--lavande); outline-offset: 2px; }
 
-  .hero { display: grid; grid-template-columns: 1.1fr .9fr; gap: 40px; align-items: center; padding: 40px 0 64px; }
-  h1 { font-size: clamp(36px, 6vw, 60px); line-height: 1.05; margin: 0 0 18px; letter-spacing: -.03em; }
-  h1 em { font-style: normal; background: linear-gradient(90deg, var(--cyan), var(--rose)); -webkit-background-clip: text; background-clip: text; color: transparent; }
-  .accroche { color: var(--doux); font-size: 19px; margin: 0 0 26px; max-width: 34em; }
-  .actions { display: flex; gap: 12px; flex-wrap: wrap; }
-  .sous-btn { color: var(--doux); font-size: 14px; margin-top: 12px; }
-  .capture { justify-self: center; width: min(360px, 100%); border-radius: 28px; border: 1px solid var(--bord);
-    box-shadow: 0 30px 80px rgba(255, 61, 110, .18), 0 0 0 8px var(--carte); }
+  .hero { display: flex; flex-wrap: wrap; align-items: center; gap: 48px; padding: 48px 0 72px; }
+  .hero-texte { flex: 1 1 440px; min-width: 0; }
+  .etiquette { display: inline-block; padding: 5px 12px; border-radius: 999px; border: 1px solid var(--bord); color: var(--doux); font-size: 13px; margin-bottom: 20px; }
+  h1 { margin: 0 0 18px; font-size: clamp(40px, 6vw, 60px); line-height: 1.05; }
+  h1 em { font-style: normal; color: var(--lime); }
+  .accroche { margin: 0 0 28px; font-size: 19px; color: var(--doux); max-width: 520px; }
+  .actions { display: flex; flex-wrap: wrap; gap: 12px; align-items: center; }
+  .visuel { flex: 1 1 420px; min-width: 0; display: flex; align-items: center; justify-content: center; gap: 20px; }
+  .brut { flex: 0 1 220px; display: flex; flex-direction: column; gap: 8px; }
+  .brut .ecran { aspect-ratio: 16/9; border-radius: 10px; background: linear-gradient(135deg, #3a3f4a, #23262e); border: 1px solid var(--bord); }
+  .brut .lecture { height: 4px; border-radius: 2px; background: var(--bord); }
+  .brut .lecture div { width: 30%; height: 4px; background: var(--doux); border-radius: 2px; }
+  .brut span { font-size: 12px; color: var(--doux); }
+  .tel { flex: 0 0 200px; display: flex; flex-direction: column; gap: 10px; }
+  .tel .ecran { aspect-ratio: 9/16; border-radius: 22px; border: 1px solid var(--bord); position: relative; overflow: hidden;
+    box-shadow: 0 0 0 6px var(--surface), -4px 0 0 7px rgba(139,140,255,.35), 4px 0 0 7px rgba(198,255,61,.35);
+    background: linear-gradient(165deg, #33405a 0%, #1a1d26 60%, #0f1116 100%); }
+  .tel .haut { position: absolute; top: 16%; left: 0; right: 0; text-align: center; font-size: 20px; }
+  .tel .ace { position: absolute; top: 52%; left: 0; right: 0; text-align: center; font-size: 32px; color: var(--lime); text-shadow: 3px 0 var(--lavande); }
+  .onde { display: flex; align-items: flex-end; gap: 3px; height: 26px; }
+  .onde span { flex: 1; background: var(--lavande); border-radius: 2px; }
+  .onde span.drop { background: var(--lime); }
 
   section { padding: 56px 0; border-top: 1px solid var(--bord); }
-  h2 { font-size: clamp(26px, 4vw, 36px); margin: 0 0 10px; letter-spacing: -.02em; }
-  .intro { color: var(--doux); margin: 0 0 30px; max-width: 40em; }
-  .grille { display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px; }
-  .bloc { background: var(--carte); border: 1px solid var(--bord); border-radius: 18px; padding: 20px; }
+  h2 { margin: 0 0 8px; font-size: clamp(26px, 4vw, 34px); }
+  .intro { margin: 0 0 28px; color: var(--doux); max-width: 40em; }
+  .timeline { display: flex; flex-direction: column; gap: 18px; padding: 24px; border-radius: 16px; background: var(--surface); border: 1px solid var(--bord); }
+  .piste { display: flex; align-items: center; gap: 16px; }
+  .piste > span { flex: 0 0 110px; font-size: 13px; color: var(--doux); }
+  .avant { flex: 1; height: 28px; border-radius: 6px; background: var(--bord); position: relative; }
+  .avant i { position: absolute; top: 10px; width: 8px; height: 8px; border-radius: 50%; background: var(--texte); }
+  .apres { flex: 1; display: flex; gap: 3px; height: 28px; }
+  .apres i { border-radius: 6px; background: var(--lavande); }
+  .apres i.drop { background: var(--lime); color: var(--fond); display: flex; align-items: center; justify-content: center; font-size: 12px; font-weight: 700; font-style: normal; }
+
+  .grille { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 14px; }
+  .bloc { background: var(--surface); border: 1px solid var(--bord); border-radius: 16px; padding: 22px; }
   .bloc h3 { margin: 0 0 6px; font-size: 18px; }
   .bloc p { margin: 0; color: var(--doux); font-size: 15px; }
-  .num { display: inline-grid; place-items: center; width: 34px; height: 34px; border-radius: 10px; background: var(--carte2);
-    color: var(--cyan); font-weight: 800; margin-bottom: 12px; }
+  .num { display: inline-grid; place-items: center; width: 34px; height: 34px; border-radius: 10px; background: var(--elevee); color: var(--lime); font-weight: 800; margin-bottom: 12px; }
 
-  .paliers { display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px; }
-  .palier { background: var(--carte); border: 1px solid var(--bord); border-radius: 20px; padding: 22px; display: flex; flex-direction: column; }
-  .palier.mis-en-avant { border-color: var(--patreon); box-shadow: 0 0 0 1px var(--patreon) inset; }
-  .palier .prix { font-size: 30px; font-weight: 800; margin: 4px 0 12px; }
-  .palier .prix small { font-size: 15px; color: var(--doux); font-weight: 500; }
-  .palier ul { margin: 0 0 18px; padding-left: 20px; color: var(--doux); font-size: 15px; flex: 1; }
-  .palier li { margin-bottom: 6px; }
-  .etiquette { align-self: flex-start; font-size: 12px; font-weight: 700; color: #fff; background: var(--patreon); padding: 3px 9px; border-radius: 999px; margin-bottom: 8px; }
+  .offres { display: flex; flex-wrap: wrap; gap: 16px; }
+  .offre { flex: 1 1 300px; padding: 28px; border-radius: 16px; background: var(--surface); border: 1px solid var(--bord); display: flex; flex-direction: column; }
+  .offre.pro { border-color: var(--or); box-shadow: 0 0 32px rgba(255,166,61,.12); }
+  .offre h3 { margin: 0; font-size: 20px; }
+  .offre.pro h3 { color: var(--or); }
+  .prix { font-family: Unbounded, Inter, sans-serif; font-size: 36px; font-weight: 800; margin: 8px 0 18px; }
+  .prix small { font-family: Inter, sans-serif; font-size: 15px; font-weight: 500; color: var(--doux); }
+  .offre ul { margin: 0 0 24px; padding-left: 20px; color: var(--doux); flex: 1; }
+  .offre li { margin-bottom: 6px; }
 
-  details { background: var(--carte); border: 1px solid var(--bord); border-radius: 14px; padding: 16px 18px; margin-bottom: 10px; }
+  details { background: var(--surface); border: 1px solid var(--bord); border-radius: 14px; padding: 16px 18px; margin-bottom: 10px; }
   summary { cursor: pointer; font-weight: 700; }
   details p { color: var(--doux); margin: 10px 0 0; font-size: 15px; }
-
-  footer { border-top: 1px solid var(--bord); padding: 28px 0 40px; color: var(--doux); font-size: 13px; }
+  footer { border-top: 1px solid var(--bord); padding: 28px 0 40px; color: var(--doux); font-size: 13px; text-align: center; }
 
   @media (max-width: 820px) {
-    .hero { grid-template-columns: 1fr; padding-top: 16px; }
-    .grille, .paliers { grid-template-columns: 1fr; }
-    .nav-liens .btn:not(.patreon) { display: none; }
+    .grille { grid-template-columns: 1fr; }
+    .nav-liens { display: none; }
+    .brut { display: none; } .visuel > svg { display: none; }
   }
 </style>
 </head>
 <body>
 <div class="page">
   <nav>
-    <a class="logo" href="#"><img src="icone.png" alt=""><b>Auto<span>Clip</span></b></a>
+    <a class="logo titre" href="#">
+      <svg width="30" height="30" viewBox="0 0 28 28" aria-hidden="true"><defs><linearGradient id="g1" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#8b8cff"/><stop offset="1" stop-color="#c6ff3d"/></linearGradient></defs><rect x="6" y="1" width="16" height="26" rx="4" fill="#c6ff3d"/><path d="M11 9.5v9l7-4.5z" fill="#0c0e0b"/></svg>
+      <span>Auto<b>Clip</b></span></a>
     <div class="nav-liens">
-      <a class="btn petit" data-lien="discord" href="#">Discord</a>
-      <a class="btn petit patreon" data-lien="patreon" href="#">♥ Patreon</a>
+      <a href="#comment">Comment ça marche</a>
+      <a href="#offres">Gratuit ou Pro</a>
+      <a href="#faq">FAQ</a>
+      <a data-lien="discord" href="#">Discord</a>
     </div>
+    <a class="btn petit" data-lien="telecharger" href="#">Télécharger</a>
   </nav>
 
   <header class="hero">
-    <div>
-      <h1>Tes clips Medal deviennent des <em>montages TikTok</em>. Tout seuls.</h1>
-      <p class="accroche">AutoClip trouve tes vrais kills Valorant, les cale pile sur le beat de ta musique et ajoute ralentis, flashs et transitions. Un clic, 20 secondes de rendu, prêt à publier.</p>
+    <div class="hero-texte">
+      <span class="etiquette">Gratuit pour Valorant · Windows 10/11</span>
+      <h1 class="titre">Tes clips. <em>Sur le beat.</em></h1>
+      <p class="accroche">AutoClip lit tes vrais kills dans Medal, les cale sur le beat de ta musique et sort un montage 9:16 prêt pour TikTok. Sans toucher à un logiciel de montage.</p>
       <div class="actions">
-        <a class="btn principal" data-lien="telecharger" href="#">⬇ Télécharger pour Windows</a>
-        <a class="btn patreon" data-lien="patreon" href="#">♥ Soutenir sur Patreon</a>
+        <a class="btn action" data-lien="telecharger" href="#">Télécharger pour Windows<small>Gratuit · installation en 1 minute</small></a>
+        <a class="btn contour" href="#offres">Voir AutoClip Pro</a>
       </div>
-      <p class="sous-btn">Gratuit pour Valorant · Windows 10/11 · Rien n'est envoyé sur internet</p>
     </div>
-    <img class="capture" src="capture.png" alt="L'app AutoClip : formats TikTok ou YouTube, type de montage, musique et style">
+    <div class="visuel" role="img" aria-label="Un clip brut de 47 secondes devient un montage vertical calé sur la musique">
+      <div class="brut">
+        <div class="ecran"></div>
+        <div class="lecture"><div></div></div>
+        <span>Clip brut · 0:47</span>
+      </div>
+      <svg width="54" height="20" viewBox="0 0 54 20" aria-hidden="true"><defs><linearGradient id="g2" x1="0" x2="1"><stop offset="0" stop-color="#8b8cff"/><stop offset="1" stop-color="#c6ff3d"/></linearGradient></defs><path d="M2 10h44M38 3l8 7-8 7" fill="none" stroke="url(#g2)" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      <div class="tel">
+        <div class="ecran"><div class="haut titre">1v4 CLUTCH</div><div class="ace titre">ACE</div></div>
+        <div class="onde" aria-hidden="true"><span style="height:30%"></span><span style="height:60%"></span><span style="height:45%"></span><span class="drop" style="height:100%"></span><span style="height:50%"></span><span style="height:75%"></span><span style="height:35%"></span><span style="height:55%"></span></div>
+      </div>
+    </div>
   </header>
 
   <section>
-    <h2>3 étapes</h2>
-    <p class="intro">Pas de logiciel de montage, pas de timeline. Si tu as Medal, tu as déjà tout.</p>
+    <h2 class="titre">47 secondes de clip. 20 secondes de montage.</h2>
+    <p class="intro">AutoClip garde seulement tes kills, met le plus gros sur le drop et pose chaque coupe sur un beat.</p>
+    <div class="timeline" role="img" aria-label="Avant : un long clip avec 4 kills dispersés. Avec AutoClip : des plans courts calés sur le beat, le meilleur kill au ralenti sur le drop.">
+      <div class="piste"><span>Avant</span><div class="avant"><i style="left:18%"></i><i style="left:41%"></i><i style="left:44%"></i><i style="left:77%"></i></div></div>
+      <div class="piste"><span>Avec AutoClip</span><div class="apres"><i style="flex:3;opacity:.55"></i><i style="flex:2;opacity:.7"></i><i style="flex:2;opacity:.85"></i><i class="drop" style="flex:4">DROP · ralenti</i><i style="flex:1"></i><i style="flex:1"></i><i style="flex:2;opacity:.7"></i></div></div>
+    </div>
+  </section>
+
+  <section id="comment">
+    <h2 class="titre">3 étapes</h2>
+    <p class="intro">Pas de timeline, pas de logiciel de montage. Si tu as Medal, tu as déjà tout.</p>
     <div class="grille">
       <div class="bloc"><span class="num">1</span><h3>Installe</h3><p>AutoClip trouve tout seul ton dossier Medal. FFmpeg est inclus, rien d'autre à installer.</p></div>
-      <div class="bloc"><span class="num">2</span><h3>Ajoute une musique</h3><p>Ta chanson préférée en mp3. AutoClip détecte le tempo, les beats et le drop.</p></div>
-      <div class="bloc"><span class="num">3</span><h3>Génère</h3><p>Ton meilleur kill tombe sur le drop. Vertical 9:16 pour TikTok et Shorts, ou 16:9 pour YouTube.</p></div>
+      <div class="bloc"><span class="num">2</span><h3>Ajoute une musique</h3><p>Ta chanson en mp3. AutoClip trouve le tempo, les beats et le drop.</p></div>
+      <div class="bloc"><span class="num">3</span><h3>Génère</h3><p>Ton meilleur kill tombe sur le drop, avec ralenti, flashs et transitions.</p></div>
     </div>
   </section>
 
   <section>
-    <h2>Ce qu'il fait</h2>
-    <p class="intro">Medal enregistre déjà tes kills. AutoClip s'en sert, donc chaque plan est un vrai kill, pas toi qui marches.</p>
+    <h2 class="titre">Ce qu'il fait</h2>
+    <p class="intro">Medal enregistre déjà tes kills. AutoClip s'en sert : chaque plan est un vrai kill.</p>
     <div class="grille">
-      <div class="bloc"><h3>Vrais kills, sur le beat</h3><p>2K, 3K, ace, clutch, one taps : les gros moments passent en premier, chaque coupe tombe sur un beat.</p></div>
-      <div class="bloc"><h3>Effets de montage pro</h3><p>Ralenti au drop, arrêt sur image, whip pan, glitch, flash, compteur de kills et textes ACE ou ONE TAP.</p></div>
-      <div class="bloc"><h3>Filtre par arme ou agent</h3><p>Un montage seulement à l'Operator, ou seulement sur Jett. AutoClip lit le fil des kills de tes clips.</p></div>
-      <div class="bloc"><h3>Copie un style</h3><p>Donne-lui un TikTok que tu aimes : AutoClip copie son rythme de coupes et ses flashs.</p></div>
+      <div class="bloc"><h3>Vrais kills, sur le beat</h3><p>2K, 3K, ace, clutch, one taps : les gros moments passent en premier.</p></div>
+      <div class="bloc"><h3>Effets de montage</h3><p>Ralenti au drop, arrêt sur image, whip pan, glitch, compteur de kills, textes ACE ou ONE TAP.</p></div>
+      <div class="bloc"><h3>Filtre par arme ou agent</h3><p>Un montage seulement à l'Operator, ou seulement sur ton main.</p></div>
+      <div class="bloc"><h3>Copie un style</h3><p>Donne-lui un TikTok que tu aimes : AutoClip copie son rythme de coupes.</p></div>
       <div class="bloc"><h3>Choisis tes kills</h3><p>Coche tes kills préférés et mets ta plus belle action sur le drop.</p></div>
       <div class="bloc"><h3>Défi entre amis</h3><p>Compare tes kills de la semaine avec tes potes et fais des montages d'équipe.</p></div>
     </div>
   </section>
 
-  <section id="patreon">
-    <h2>Soutiens AutoClip sur Patreon</h2>
-    <p class="intro">AutoClip reste gratuit pour tout le monde. Les membres Patreon financent les nouvelles fonctions et reçoivent des bonus.</p>
-    <div class="paliers">
-      <div class="palier">
-        <h3>Supporter</h3>
-        <div class="prix">3 $ <small>/ mois</small></div>
-        <ul>
-          <li>Ton nom dans les remerciements du site</li>
-          <li>Rôle Supporter sur le Discord</li>
-          <li>Les coulisses du développement</li>
-        </ul>
-        <a class="btn patreon" data-lien="patreon" href="#">Choisir</a>
+  <section id="offres">
+    <h2 class="titre">Gratuit ou Pro</h2>
+    <p class="intro">Les montages Valorant sont complets et gratuits. Pro finance le projet et débloque le reste.</p>
+    <div class="offres">
+      <div class="offre">
+        <h3>Gratuit</h3>
+        <div class="prix">0 $</div>
+        <ul><li>Montages Valorant complets</li><li>Vrais kills, sur le beat</li><li>Filtres par arme et par agent</li><li>Petit « Fait avec AutoClip » sur la vidéo</li></ul>
+        <a class="btn" data-lien="telecharger" href="#">Télécharger</a>
       </div>
-      <div class="palier mis-en-avant">
-        <span class="etiquette">Le plus populaire</span>
-        <h3>Monteur</h3>
-        <div class="prix">6 $ <small>/ mois</small></div>
-        <ul>
-          <li>Tout le palier Supporter</li>
-          <li><b>AutoClip Pro</b> : sans filigrane, tous tes jeux, format YouTube, 3 versions, 60 i/s</li>
-          <li>Un pack de styles exclusif chaque mois</li>
-          <li>Les nouvelles versions 2 semaines avant tout le monde</li>
-        </ul>
-        <a class="btn patreon" data-lien="patreon" href="#">Choisir</a>
-      </div>
-      <div class="palier">
-        <h3>Pro</h3>
-        <div class="prix">12 $ <small>/ mois</small></div>
-        <ul>
-          <li>Tout le palier Monteur</li>
-          <li>Tu votes pour les prochaines fonctions</li>
-          <li>Aide prioritaire sur le Discord</li>
-        </ul>
-        <a class="btn patreon" data-lien="patreon" href="#">Choisir</a>
+      <div class="offre pro">
+        <h3>AutoClip Pro</h3>
+        <div class="prix">6 $<small> / mois sur Patreon</small></div>
+        <ul><li>Sans filigrane</li><li>Tous tes jeux Medal</li><li>Format YouTube 16:9</li><li>3 versions au choix et 60 i/s</li><li>Un pack de styles exclusif par mois</li></ul>
+        <a class="btn pro" data-lien="patreon" href="#">Devenir Pro</a>
       </div>
     </div>
   </section>
 
-  <section>
-    <h2>Questions</h2>
-    <details><summary>C'est vraiment gratuit ?</summary><p>Oui. Les montages Valorant sont complets et gratuits : vrais kills, effets, filtres par arme et par agent. La version gratuite ajoute un petit « Fait avec AutoClip » sur la vidéo. AutoClip Pro (palier Monteur sur Patreon) l'enlève et débloque tes autres jeux, le format YouTube, les 3 versions et le 60 i/s.</p></details>
-    <details><summary>Il me faut quoi ?</summary><p>Un PC Windows 10 ou 11 (64 bits) et Medal pour enregistrer tes clips. AutoClip marche surtout avec Valorant : les autres jeux utilisent l'analyse du son, moins précise.</p></details>
+  <section id="faq">
+    <h2 class="titre">Questions</h2>
+    <details><summary>C'est vraiment gratuit ?</summary><p>Oui. Les montages Valorant sont complets et gratuits : vrais kills, effets, filtres par arme et par agent. La version gratuite ajoute un petit « Fait avec AutoClip » sur la vidéo. AutoClip Pro l'enlève et débloque tes autres jeux, le format YouTube, les 3 versions et le 60 i/s.</p></details>
+    <details><summary>Comment j'active Pro ?</summary><p>Deviens membre Pro sur Patreon. Chaque mois, un code est publié dans un post réservé aux membres : colle-le dans AutoClip, onglet Plus.</p></details>
+    <details><summary>Il me faut quoi ?</summary><p>Un PC Windows 10 ou 11 (64 bits) et Medal pour enregistrer tes clips.</p></details>
     <details><summary>Mes clips sont envoyés quelque part ?</summary><p>Non. Tout se passe sur ton PC. Seul le défi entre amis, si tu le rejoins, partage ton pseudo et tes stats de la semaine.</p></details>
     <details><summary>Je peux utiliser n'importe quelle musique ?</summary><p>AutoClip accepte toutes tes chansons, mais pour publier, prends de la musique libre de droits. Autre option : monte avec la chanson tendance, puis remplace le son par la même chanson dans la bibliothèque de TikTok.</p></details>
     <details><summary>Windows dit que l'app est inconnue</summary><p>C'est normal pour une nouvelle app pas encore signée. Clique sur « Informations complémentaires », puis « Exécuter quand même ».</p></details>
   </section>
 
-  <footer>
-    AutoClip n'est pas affilié à Riot Games ni à Medal. Projet de fan réalisé dans le cadre de la politique « Legal Jibber Jabber » de Riot Games. Valorant est une marque de Riot Games, Inc.
-  </footer>
+  <footer>Fait au Québec · AutoClip n'est pas affilié à Riot Games ni à Medal. Projet de fan réalisé dans le cadre de la politique « Legal Jibber Jabber » de Riot Games. Valorant est une marque de Riot Games, Inc.</footer>
 </div>
-
 <script>
-  // Remplis ces liens avant de mettre le site en ligne.
+  // Liens du site : un lien vide cache le bouton.
   const LIENS = {
     telecharger: "https://github.com/lohanmartel-source/autoclip/releases/latest",
     patreon: "https://www.patreon.com/c/TheAutoclip",

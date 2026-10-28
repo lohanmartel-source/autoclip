@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<meta name="theme-color" content="#0e0f13">
+<meta name="theme-color" content="#0c0e0b">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="AutoClip">
@@ -11,19 +11,28 @@
 <link rel="icon" href="/icone.svg">
 <link rel="apple-touch-icon" href="/icone.svg">
 <title>AutoClip</title>
+
 <style>
+  /* Polices livrées avec l'app (licence SIL OFL, dans web/polices) : marchent sans internet. */
+  @font-face { font-family: "Inter"; font-weight: 400; font-style: normal; font-display: swap; src: url("/polices/inter-latin-400-normal.woff2") format("woff2"); }
+  @font-face { font-family: "Inter"; font-weight: 500; font-style: normal; font-display: swap; src: url("/polices/inter-latin-500-normal.woff2") format("woff2"); }
+  @font-face { font-family: "Inter"; font-weight: 600; font-style: normal; font-display: swap; src: url("/polices/inter-latin-600-normal.woff2") format("woff2"); }
+  @font-face { font-family: "Inter"; font-weight: 700; font-style: normal; font-display: swap; src: url("/polices/inter-latin-700-normal.woff2") format("woff2"); }
+  @font-face { font-family: "Unbounded"; font-weight: 700; font-style: normal; font-display: swap; src: url("/polices/unbounded-latin-700-normal.woff2") format("woff2"); }
+  @font-face { font-family: "Unbounded"; font-weight: 800; font-style: normal; font-display: swap; src: url("/polices/unbounded-latin-800-normal.woff2") format("woff2"); }
   :root {
-    --fond: #0e0f13; --carte: #171920; --carte2: #1f222b; --bord: #2a2e3a;
-    --texte: #e9eaf0; --doux: #9aa0b4; --rose: #ff3d6e; --cyan: #25f4ee; --rouge: #ff5a5a; --jaune: #ffe14d;
+    /* Palette « Lime » : --rose = action principale (lime), --cyan = données (lavande), --or = Pro */
+    --fond: #0c0e0b; --carte: #161a14; --carte2: #1f241c; --bord: #2a3125;
+    --texte: #f4f5f7; --doux: #9aa0ad; --rose: #c6ff3d; --cyan: #8b8cff; --or: #ffa63d; --sur-action: #0c0e0b;
+    --rouge: #ff5a4f; --jaune: #ffd25a;
   }
   * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
   html, body { margin: 0; background: var(--fond); color: var(--texte);
-    font: 16px/1.4 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
+    font: 16px/1.4 Inter, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; font-variant-numeric: tabular-nums; }
   main { max-width: 560px; margin: 0 auto; padding: calc(8px + env(safe-area-inset-top)) 16px calc(96px + env(safe-area-inset-bottom)); }
   header { display: flex; align-items: center; justify-content: space-between; padding: 8px 0 16px; }
-  h1 { font-size: 24px; margin: 0; letter-spacing: -0.02em; }
-  h1 span { background: linear-gradient(90deg, var(--cyan), var(--rose)); -webkit-background-clip: text;
-    background-clip: text; color: transparent; }
+  h1 { font: 800 22px Unbounded, Inter, system-ui, sans-serif; margin: 0; letter-spacing: -0.02em; display: flex; align-items: center; }
+  h1 span { color: var(--rose); } .logo-entete { margin-right: 10px; }
   h2 { font-size: 15px; margin: 0 0 12px; color: var(--doux); font-weight: 600; letter-spacing: .02em; }
   .pastille { font-size: 13px; color: var(--doux); display: flex; align-items: center; gap: 6px; }
   .pastille::before { content: ""; width: 8px; height: 8px; border-radius: 50%; background: var(--doux); }
@@ -45,10 +54,10 @@
   .bascule small { display: block; color: var(--doux); font-size: 13px; }
   .bascule input { flex: none; width: 52px; height: 30px; appearance: none; -webkit-appearance: none; background: var(--bord); border-radius: 15px; position: relative; transition: .2s; }
   .bascule input::after { content: ""; position: absolute; top: 3px; left: 3px; width: 24px; height: 24px; border-radius: 50%; background: #fff; transition: .2s; }
-  .bascule input:checked { background: var(--rose); } .bascule input:checked::after { left: 25px; }
+  .bascule input:checked { background: var(--rose); } .bascule input:checked::after { background: var(--sur-action); } .bascule input:checked::after { left: 25px; }
   .btn { display: flex; align-items: center; justify-content: center; gap: 8px; width: 100%; border: 0; border-radius: 14px;
     font: inherit; font-weight: 700; min-height: 54px; padding: 0 16px; color: #fff; text-decoration: none; }
-  .btn.principal { background: linear-gradient(90deg, var(--rose), #ff6a3d); font-size: 18px; }
+  .btn.principal { background: var(--rose); color: var(--sur-action); font-size: 17px; border-radius: 999px; box-shadow: 0 0 24px rgba(198,255,61,.25); }
   .btn:disabled { opacity: .45; }
   .btn.second { background: var(--carte2); border: 1px solid var(--bord); color: var(--texte); font-weight: 600; min-height: 48px; }
   .btn.danger { background: var(--rouge); }
@@ -59,7 +68,7 @@
   details summary::before { content: "▸ "; } details[open] summary::before { content: "▾ "; }
   details[open] summary { margin-bottom: 12px; }
   .barre { height: 10px; background: var(--carte2); border-radius: 5px; overflow: hidden; margin: 10px 0 8px; }
-  .barre div { height: 100%; width: 0; background: linear-gradient(90deg, var(--cyan), var(--rose)); transition: width .6s; }
+  .barre div { height: 100%; width: 0; background: var(--cyan); transition: width .6s; }
   .info { display: flex; justify-content: space-between; font-size: 14px; color: var(--doux); }
   pre { background: #0a0b0e; border-radius: 10px; padding: 10px; font-size: 11.5px; max-height: 220px; overflow: auto;
     white-space: pre-wrap; word-break: break-word; color: #b9bfd0; margin: 8px 0 0; }
@@ -115,7 +124,7 @@
   .kill .etoile { position: absolute; top: 4px; right: 4px; width: 36px; height: 36px; border-radius: 50%; border: 0;
     background: rgba(0,0,0,.55); color: #fff; font-size: 18px; display: grid; place-items: center; }
   .kill.drop .etoile { background: var(--jaune); color: #000; }
-  .tag { display: inline-block; font-size: 11px; font-weight: 700; padding: 2px 6px; border-radius: 6px; background: var(--rose); color: #fff; margin-right: 4px; }
+  .tag { display: inline-block; font-size: 11px; font-weight: 700; padding: 2px 6px; border-radius: 6px; background: var(--rose); color: var(--sur-action); margin-right: 4px; }
   .tag.cyan { background: var(--cyan); color: #000; }
   .barre-choix { position: fixed; left: 0; right: 0; bottom: calc(66px + env(safe-area-inset-bottom)); z-index: 15; padding: 10px 16px;
     display: flex; justify-content: center; }
@@ -129,7 +138,7 @@
   .tuile { background: var(--carte2); border-radius: 12px; padding: 10px; }
   .tuile b { display: block; font-size: 24px; letter-spacing: -0.02em; }
   .tuile span { font-size: 12.5px; color: var(--doux); }
-  .tuile.forte { grid-column: span 3; display: flex; align-items: baseline; gap: 10px; background: linear-gradient(120deg, #1d2030, #261827); }
+  .tuile.forte { grid-column: span 3; display: flex; align-items: baseline; gap: 10px; background: #1f241c; border: 1px solid var(--bord); }
   .tuile.forte b { font-size: 44px; }
   .histo { display: flex; align-items: flex-end; gap: 2px; height: 130px; padding-top: 8px; }
   .histo div { flex: 1; background: var(--rose); border-radius: 3px 3px 0 0; min-height: 2px; position: relative; }
@@ -139,7 +148,7 @@
   .rang { display: flex; align-items: center; gap: 10px; font-size: 14px; margin: 7px 0; }
   .rang .nom { width: 96px; flex: none; }
   .rang .jauge { flex: 1; height: 10px; background: var(--carte2); border-radius: 5px; overflow: hidden; }
-  .rang .jauge div { height: 100%; background: linear-gradient(90deg, var(--cyan), var(--rose)); }
+  .rang .jauge div { height: 100%; background: var(--cyan); }
   .rang .n { width: 36px; text-align: right; color: var(--doux); font-variant-numeric: tabular-nums; }
 
   /* Ménage */
@@ -158,27 +167,88 @@
   .pastille.patreon { background: #ff424d; color: #fff; border: 0; cursor: pointer; font: 700 13px system-ui, sans-serif;
     padding: 6px 12px; border-radius: 999px; white-space: nowrap; }
   .pastille.patreon::before { display: none; }
-  .btn.patreon { background: #ff424d; border-color: #ff424d; color: #fff; }
+  .btn.patreon { background: #ff424d; border-color: #ff424d; color: #fff; box-shadow: none; }
+  a { color: var(--cyan); }
   .bienvenue { border-color: var(--cyan); }
-  .pro-tag { font-size: 10px; font-weight: 800; color: #0e0f13; background: linear-gradient(90deg, var(--cyan), var(--rose));
-    padding: 1px 5px; border-radius: 5px; margin-left: 4px; vertical-align: middle; letter-spacing: .04em; }
+  .pro-tag { font-size: 10px; font-weight: 800; color: var(--or); border: 1px solid var(--or); background: transparent;
+    padding: 0 5px; border-radius: 5px; margin-left: 4px; vertical-align: middle; letter-spacing: .04em; }
   body.pro .pro-tag { display: none; }
-  .pastille-pro { font: 800 12px system-ui, sans-serif; color: #0e0f13; background: linear-gradient(90deg, var(--cyan), var(--rose));
+  .pastille-pro { font: 800 12px Inter, system-ui, sans-serif; color: var(--sur-action); background: var(--or);
     padding: 5px 10px; border-radius: 999px; }
-  .pro-carte { border-color: var(--rose); }
+  .pro-carte { border-color: var(--or); }
   .liste-pro { margin: 0 0 14px; padding-left: 20px; color: var(--doux); font-size: 14px; }
   .puces button.verrou { opacity: .55; }
   .etapes { margin: 0; padding-left: 22px; display: grid; gap: 12px; }
   .etapes li b { display: block; }
   .etapes li span { color: var(--doux); font-size: 14px; }
   .etapes li.fait b::after { content: " ✓"; color: var(--cyan); }
+  .carte { border-radius: 14px; }
+  .segments button.actif { background: var(--texte); color: var(--sur-action); }
+  .logo-nav, .barre-etat { display: none; }
+  .logo-entete { flex: none; }
+  /* Petit écran : la carte du montage en cours reste en haut */
+  #colGauche, #colDroite { display: contents; }
+  #ongletMontage { display: flex; flex-direction: column; }
+  #carteTache { order: -1; } #carteMontages { order: 5; }
+
+  /* ===== Fenêtre de bureau (900 px et plus) ===== */
+  @media (min-width: 900px) {
+    body { padding-left: 220px; }
+    main { max-width: 1440px; padding: 12px 28px 56px; }
+    header { padding: 8px 0 20px; } header h1 { visibility: hidden; }
+    nav.onglets { top: 0; bottom: 28px; right: auto; width: 220px; padding: 18px 12px; flex-direction: column; justify-content: flex-start;
+      border-top: 0; border-right: 1px solid var(--bord); background: #10130e; backdrop-filter: none; }
+    nav.onglets .dedans { flex-direction: column; gap: 4px; max-width: none; }
+    .logo-nav { display: flex; align-items: center; gap: 10px; padding: 0 10px 22px; font: 800 18px Unbounded, Inter, sans-serif; letter-spacing: -0.02em; }
+    .logo-nav b { color: var(--rose); font-weight: 800; }
+    nav.onglets button { flex: none; flex-direction: row; justify-content: flex-start; gap: 12px; font-size: 15px; padding: 10px 12px;
+      min-height: 44px; border-radius: 10px; }
+    nav.onglets button svg { width: 20px; height: 20px; }
+    nav.onglets button:hover { background: var(--carte); color: var(--texte); }
+    nav.onglets button.actif { background: var(--carte2); font-weight: 600; }
+    .barre-etat { display: flex; position: fixed; left: 0; right: 0; bottom: 0; height: 28px; z-index: 25; align-items: center; gap: 18px;
+      padding: 0 16px; background: #10130e; border-top: 1px solid var(--bord); font-size: 12px; color: var(--doux); }
+    .etat-tache { background: none; border: 0; color: var(--cyan); font: inherit; padding: 0; cursor: pointer; }
+    .toast { bottom: 48px; left: calc(50% + 110px); }
+    .barre-choix { left: 220px; bottom: 36px; }
+    .voile { align-items: center; }
+
+    /* Montage : réglages à gauche, résultat et montages à droite */
+    #ongletMontage { display: grid; grid-template-columns: minmax(0, 1fr) minmax(320px, 400px); gap: 20px; align-items: start; }
+    #colGauche, #colDroite { display: block; min-width: 0; }
+    #colDroite { position: sticky; top: 12px; }
+    #carteReglages { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); column-gap: 28px; padding: 20px 22px 0; }
+    #carteReglages > h2, #carteReglages > .large, #carteReglages > .actions-generer { grid-column: 1 / -1; }
+    #carteReglages > .champ { margin-bottom: 18px; }
+    #carteReglages > .bascule { margin-bottom: 4px; }
+    .actions-generer { position: sticky; bottom: 28px; margin: 12px -22px 0; padding: 14px 22px; background: var(--carte);
+      border-top: 1px solid var(--bord); border-radius: 0 0 14px 14px; }
+    .actions-generer .astuce { margin-bottom: 0; }
+    #carteTache video { max-height: 56vh; }
+    .video-item { display: grid; grid-template-columns: 54px minmax(0, 1fr); column-gap: 12px; row-gap: 8px; }
+    .video-item .mini { width: 54px; height: 96px; grid-row: span 2; }
+    .video-item .nom { align-self: end; }
+    .video-item:not(:has(.mini)) { grid-template-columns: minmax(0, 1fr); }
+    .video-item .actions { gap: 4px; }
+    .video-item .icone { width: 34px; height: 34px; border-radius: 9px; font-size: 13px; }
+    .video-item .icone.texte { width: auto; padding: 0 9px; font-size: 12px; }
+
+    /* Mes kills : grille plus large */
+    .grille { grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 14px; }
+    /* Stats et Plus : deux colonnes */
+    #ongletStats, #ongletPlus { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; align-items: start; }
+    #ongletStats > .carte, #ongletPlus > .carte { margin-bottom: 0; }
+    #ongletStats > .carte:first-child, #ongletStats > p { grid-column: 1 / -1; }
+    .tuiles { grid-template-columns: repeat(6, minmax(0, 1fr)); }
+    .tuile.forte { grid-column: span 2; }
+  }
   @media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
 </style>
 </head>
 <body>
 <main>
   <header>
-    <h1>Auto<span>Clip</span></h1>
+    <h1><svg class="logo-entete" width="26" height="26" viewBox="0 0 28 28" aria-hidden="true"><defs><linearGradient id="gtete" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#8b8cff"/><stop offset="1" stop-color="#c6ff3d"/></linearGradient></defs><rect x="6" y="1" width="16" height="26" rx="4" fill="#c6ff3d"/><path d="M11 9.5v9l7-4.5z" fill="#0c0e0b"/></svg>Auto<span>Clip</span></h1>
     <div class="ligne" style="flex:none;gap:8px;width:auto">
       <button class="pastille patreon cache" id="btnPatreonHaut">♥ Patreon</button>
       <span class="pastille-pro cache" id="badgePro">PRO</span>
@@ -186,28 +256,9 @@
     </div>
   </header>
 
-  <!-- Montage en cours / résultat (visible sur tous les onglets) -->
-  <section id="carteTache" class="carte cache">
-    <h2 id="titreTache">Montage en cours</h2>
-    <div id="zoneProgression">
-      <div class="info"><span id="etape">…</span><span id="chrono">0 s</span></div>
-      <div class="barre"><div id="barre"></div></div>
-    </div>
-    <div id="zoneErreur" class="erreur cache"></div>
-    <div id="zoneResultat" class="cache">
-      <video id="lecteur" controls playsinline preload="metadata"></video>
-      <button id="btnVoirDossier" class="btn principal">Voir dans l'Explorateur</button>
-      <div class="ligne" style="margin-top:8px">
-        <button class="btn second" id="btnLegendeResultat">Légende + hashtags</button>
-        <button class="btn second cache" id="btnFinaliserResultat">Faire la version finale</button>
-      </div>
-      <p class="astuce">Glisse la vidéo de l'Explorateur dans TikTok, YouTube Shorts ou Instagram. La légende + hashtags est prête à copier.</p>
-    </div>
-    <details id="detailsJournal"><summary>Détails</summary><pre id="journal"></pre></details>
-  </section>
-
   <!-- ============ Onglet Montage ============ -->
   <div id="ongletMontage">
+  <div id="colGauche">
   <section class="carte bienvenue cache" id="carteBienvenue">
     <h2>Bienvenue dans AutoClip</h2>
     <p class="astuce" style="margin-top:0">3 étapes et ton premier montage est prêt :</p>
@@ -218,17 +269,17 @@
       <li id="etape3"><b>Générer</b><span>Touche « Générer le montage ». AutoClip trouve tes meilleurs kills et les cale sur le beat.</span></li>
     </ol>
   </section>
-  <section class="carte">
+  <section class="carte" id="carteReglages">
     <h2>Nouveau montage</h2>
 
-    <div class="champ">
+    <div class="champ large">
       <label class="titre">Format</label>
       <div class="segments" data-champ="format">
         <button data-v="vertical" class="actif">TikTok / Shorts</button><button data-v="youtube" data-pro="1">YouTube 16:9 long <b class="pro-tag">PRO</b></button>
       </div>
     </div>
 
-    <div class="champ">
+    <div class="champ large">
       <label class="titre">Type de montage</label>
       <div class="segments" data-champ="mode">
         <button data-v="kills" class="actif">Kills</button><button data-v="fun">Fails</button><button data-v="morts">Mes morts</button><button data-v="equipe">Équipe</button>
@@ -236,7 +287,7 @@
       <p class="astuce cache" id="infoFun"></p>
     </div>
 
-    <div class="champ">
+    <div class="champ large">
       <label class="titre">Musique</label>
       <div class="ligne">
         <select id="musique"><option value="">Aucune musique</option></select>
@@ -272,7 +323,7 @@
       </div>
     </div>
 
-    <div class="champ">
+    <div class="champ large">
       <label class="titre">Jeux <b id="infoJeux">tous</b></label>
       <div class="puces" id="listeJeux"><span class="vide">Chargement…</span></div>
     </div>
@@ -375,14 +426,38 @@
       </details>
     </div>
 
+    <div class="actions-generer">
     <button class="btn principal" id="btnGenerer">Générer le montage</button>
     <p class="astuce" id="infoMarque">Version gratuite : un petit « Fait avec AutoClip » apparaît sur la vidéo. <a href="#" id="lienPro">AutoClip Pro</a> l'enlève.</p>
+    </div>
   </section>
 
-  <section class="carte">
+  </div>
+  <div id="colDroite">
+  <!-- Montage en cours / résultat -->
+  <section id="carteTache" class="carte cache">
+    <h2 id="titreTache">Montage en cours</h2>
+    <div id="zoneProgression">
+      <div class="info"><span id="etape">…</span><span id="chrono">0 s</span></div>
+      <div class="barre"><div id="barre"></div></div>
+    </div>
+    <div id="zoneErreur" class="erreur cache"></div>
+    <div id="zoneResultat" class="cache">
+      <video id="lecteur" controls playsinline preload="metadata"></video>
+      <button id="btnVoirDossier" class="btn principal">Voir dans l'Explorateur</button>
+      <div class="ligne" style="margin-top:8px">
+        <button class="btn second" id="btnLegendeResultat">Légende + hashtags</button>
+        <button class="btn second cache" id="btnFinaliserResultat">Faire la version finale</button>
+      </div>
+      <p class="astuce">Glisse la vidéo de l'Explorateur dans TikTok, YouTube Shorts ou Instagram. La légende + hashtags est prête à copier.</p>
+    </div>
+    <details id="detailsJournal"><summary>Détails</summary><pre id="journal"></pre></details>
+  </section>
+  <section class="carte" id="carteMontages">
     <h2>Mes montages</h2>
     <div id="listeVideos"><p class="vide">Aucun montage pour l'instant.</p></div>
   </section>
+  </div>
   </div>
 
   <!-- ============ Onglet Mes kills ============ -->
@@ -543,6 +618,7 @@
 
 <nav class="onglets" aria-label="Sections">
   <div class="dedans">
+    <div class="logo-nav"><svg width="26" height="26" viewBox="0 0 28 28" aria-hidden="true"><defs><linearGradient id="gnav" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#8b8cff"/><stop offset="1" stop-color="#c6ff3d"/></linearGradient></defs><rect x="6" y="1" width="16" height="26" rx="4" fill="#c6ff3d"/><path d="M11 9.5v9l7-4.5z" fill="#0c0e0b"/></svg><span>Auto<b>Clip</b></span></div>
     <button data-onglet="Montage" class="actif"><svg viewBox="0 0 24 24"><rect x="5" y="3" width="14" height="18" rx="3"/><path d="M10 9v6l5-3z"/></svg>Montage</button>
     <button data-onglet="Kills"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="8"/><circle cx="12" cy="12" r="2"/><path d="M12 2v4M12 18v4M2 12h4M18 12h4"/></svg>Mes kills</button>
     <button data-onglet="Stats"><svg viewBox="0 0 24 24"><path d="M4 20V10M10 20V4M16 20v-7M22 20H2"/></svg>Stats</button>
@@ -560,6 +636,7 @@
   </div>
 </div></div>
 <div class="toast" id="toast"></div>
+<footer class="barre-etat" id="barreEtat"><button id="etatTache" class="etat-tache cache"></button><span id="etatClips"></span><span id="etatVersion" style="margin-left:auto"></span></footer>
 
 <script>
 const $ = (id) => document.getElementById(id);
@@ -741,6 +818,8 @@ async function rafraichir() {
   $("etatIndex").textContent = ix.en_cours ? `Analyse de tes clips en cours (${ix.clips} faits)… ${ix.message || ""}`
     : `${ix.clips || 0} clips analysés (armes, agents, one taps).`;
   majMusiques(); majJeux(); majTache(); majVideos(); majApp();
+  $("etatClips").textContent = `${ix.clips || 0} clips analysés` + (etat.clips_ok ? " · Medal détecté" : " · dossier Medal à choisir");
+  $("etatVersion").textContent = `AutoClip ${etat.version} · ` + (etat.pro && etat.pro.actif ? "Pro" : "Version gratuite");
   planifier(etat.tache.en_cours ? 1000 : 5000);
 }
 function planifier(ms) { clearTimeout(minuterie); minuterie = setTimeout(rafraichir, ms); }
@@ -802,6 +881,10 @@ $("detailsArmes").addEventListener("toggle", () => { if ($("detailsArmes").open)
 
 function majTache() {
   const t = etat.tache, carte = $("carteTache");
+  const et = $("etatTache");
+  et.classList.toggle("cache", !t.en_cours && !t.erreur);
+  et.textContent = t.en_cours ? `● ${t.etape || "Montage"} · ${Math.round(t.progression * 100)} %` : t.erreur ? "● Échec du montage" : "";
+  et.style.color = t.erreur && !t.en_cours ? "var(--rouge)" : "";
   const active = t.en_cours || t.erreur || t.resultat;
   if (!active && carte.dataset.lecture !== "1") carte.classList.add("cache");
   if (active) carte.classList.remove("cache");
@@ -1090,6 +1173,7 @@ function majApp() {
   $("etape1").classList.toggle("fait", ok1); $("etape2").classList.toggle("fait", ok2); $("etape3").classList.toggle("fait", ok3);
   $("etape1Info").textContent = ok1 ? "Trouvé : " + etat.clips : "On n'a pas trouvé le dossier où Medal enregistre tes clips.";
 }
+$("etatTache").onclick = () => { allerOnglet("Montage"); };
 $("btnPatreon").onclick = $("btnPatreonHaut").onclick = $("btnDevenirPro").onclick = () => lien("patreon");
 $("lienPro").onclick = (e) => { e.preventDefault(); proposerPro(""); };
 $("btnActiverPro").onclick = async () => {

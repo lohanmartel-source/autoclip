@@ -54,7 +54,8 @@ def etat() -> dict:
     info = lire_code(code)
     if not info:
         return {"actif": False, "expire": "", "nom": ""}
-    actif = date.fromisoformat(info["expire"]) >= date.today()
+    debut = date.fromisoformat(info.get("debut") or "2000-01-01")
+    actif = debut <= date.today() <= date.fromisoformat(info["expire"])
     return {"actif": actif, "expire": info["expire"], "nom": str(info.get("nom", ""))[:40],
             "expire_bientot": actif and (date.fromisoformat(info["expire"]) - date.today()).days <= 5}
 
@@ -69,6 +70,8 @@ def activer(code: str) -> dict:
         raise ValueError("Code invalide. Copie-le en entier depuis le post Patreon réservé aux membres.")
     if date.fromisoformat(info["expire"]) < date.today():
         raise ValueError(f"Ce code a expiré le {info['expire']}. Le nouveau code est sur Patreon.")
+    if info.get("debut") and date.fromisoformat(info["debut"]) > date.today():
+        raise ValueError(f"Ce code ne marche qu'à partir du {info['debut']}.")
     FICHIER.write_text("".join(str(code).split()) + "\n", encoding="utf-8")
     return etat()
 
@@ -108,9 +111,12 @@ def appliquer(o):
                    fps=30, jeux=jeux, marque=True)
 
 
-def creer_code(graine: bytes, expire: date, nom: str = "") -> str:
+def creer_code(graine: bytes, expire: date, nom: str = "", debut: date | None = None) -> str:
     """Pour l'auteur seulement (outils/creer_code_pro.py) : fabrique un code signé."""
-    brut = json.dumps({"expire": expire.isoformat(), "nom": nom}, separators=(",", ":")).encode()
+    d = {"expire": expire.isoformat(), "nom": nom}
+    if debut:
+        d["debut"] = debut.isoformat()
+    brut = json.dumps(d, separators=(",", ":")).encode()
     sig = ed25519.signer(graine, brut)
     enc = lambda b: base64.urlsafe_b64encode(b).decode().rstrip("=")
     return PREFIXE + enc(brut) + "." + enc(sig)

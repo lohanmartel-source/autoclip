@@ -35,7 +35,7 @@ def main() -> int:
     else:
         t = date.today()
         expire = date(t.year + (t.month == 12), t.month % 12 + 1, 7)
-    code = licence.creer_code(graine, expire, a.nom or f"Patreon {date.today():%Y-%m}")
+    code = licence.creer_code(graine, expire, a.nom or f"Patreon {date.today():%Y-%m}", date.today().replace(day=1))
     if not licence.lire_code(code):
         print("Erreur : ce code ne passe pas la vérification (mauvaise clé ?).")
         return 1

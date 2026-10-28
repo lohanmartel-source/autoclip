@@ -46,8 +46,8 @@ def main() -> int:
 
     webview.settings["ALLOW_DOWNLOADS"] = True
     fenetre = webview.create_window(
-        f"AutoClip {chemins.VERSION}", url, width=560, height=940, min_size=(420, 600),
-        background_color="#0e0f13", text_select=True)
+        f"AutoClip {chemins.VERSION}", url, width=1280, height=820, min_size=(420, 600),
+        background_color="#0c0e0b", text_select=True)
 
     def choisir(depart: str = "") -> str:
         res = fenetre.create_file_dialog(webview.FOLDER_DIALOG, directory=depart or "")

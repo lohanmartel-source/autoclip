@@ -343,6 +343,8 @@ class Gestionnaire(BaseHTTPRequestHandler):
             return self._texte(MANIFEST, "application/manifest+json")
         if chemin == "/icone.svg":
             return self._texte(ICONE, "image/svg+xml")
+        if chemin.startswith("/polices/") and self._local():
+            return self._fichier(RESSOURCES / "web" / "polices", chemin[len("/polices/"):])
 
         if not self._autorise():
             return self._refuser()
@@ -960,18 +962,19 @@ class Gestionnaire(BaseHTTPRequestHandler):
 # ---------------------------------------------------------------- pages fixes
 PAGE_REFUS = """<!doctype html><html lang="fr"><meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1"><title>AutoClip</title>
-<body style="background:#0e0f13;color:#e9eaf0;font:16px system-ui;padding:32px;text-align:center">
+<body style="background:#0c0e0b;color:#f4f5f7;font:16px system-ui;padding:32px;text-align:center">
 <h2>AutoClip</h2><p>Ouvre AutoClip depuis son raccourci (menu Démarrer ou bureau).</p></body></html>"""
 
 MANIFEST = json.dumps({
     "name": "AutoClip", "short_name": "AutoClip", "start_url": "/", "display": "standalone",
-    "background_color": "#0e0f13", "theme_color": "#0e0f13",
+    "background_color": "#0c0e0b", "theme_color": "#0c0e0b",
     "icons": [{"src": "/icone.svg", "sizes": "any", "type": "image/svg+xml"}],
 })
 
-ICONE = """<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512"><rect width="512" height="512" rx="112" fill="#0e0f13"/>
-<rect x="140" y="96" width="232" height="320" rx="36" fill="none" stroke="#ff3d6e" stroke-width="28"/>
-<path d="M226 196v120l100-60z" fill="#25f4ee"/></svg>"""
+ICONE = """<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512"><defs><linearGradient id="g" x1="0" y1="0" x2="1" y2="1">
+<stop offset="0" stop-color="#8b8cff"/><stop offset="1" stop-color="#c6ff3d"/></linearGradient></defs>
+<rect width="512" height="512" rx="112" fill="#0c0e0b"/><rect x="146" y="56" width="220" height="400" rx="52" fill="#c6ff3d"/>
+<path d="M216 176v160l130-80z" fill="#0c0e0b"/></svg>"""
 
 
 def demarrer(port: int = 0) -> tuple[ThreadingHTTPServer, str]:
