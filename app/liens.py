@@ -18,7 +18,7 @@ LIENS = {
 }
 
 # Dépôt GitHub où sont publiées les versions (ex. "ton-compte/autoclip"). Vide = pas de vérification.
-DEPOT_GITHUB = ""
+DEPOT_GITHUB = "lohanmartel-source/autoclip"
 
 _maj: dict = {"verifie": 0.0, "version": "", "url": ""}
 

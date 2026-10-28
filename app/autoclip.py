@@ -85,6 +85,7 @@ class Options:
     instrumental: bool = True        # musique sans paroles pendant que tu parles (si Demucs est installé)
     arret_image: bool = True         # arrêt sur image + contour de l'ennemi au drop
     profil: str = ""                 # style copié d'une vidéo (nom du profil, voir styles_copies/)
+    marque: bool = False             # « Fait avec AutoClip » sur la vidéo (version gratuite)
 
 
 def lister_clips(sources: list[str], derniers: int = 0) -> list[Path]:
@@ -302,7 +303,7 @@ def _rendu_de(o: Options) -> Rendu:
     return Rendu(largeur=pair(W), hauteur=pair(H), fps=o.fps, cadrage=o.cadrage,
                  qualite="apercu" if o.apercu else "finale", police=trouver_police(),
                  textes_kills=o.textes_kills, style=o.style, filigrane=o.filigrane,
-                 caster=o.caster, instrumental=o.instrumental, gel=o.arret_image)
+                 caster=o.caster, instrumental=o.instrumental, gel=o.arret_image, marque=o.marque)
 
 
 def _afficher_plan(segments, duree, chanson, rythme, fps, log):
@@ -380,8 +381,10 @@ def _sauver_infos(sortie_v: Path, o: Options, graine0: int, v: int, chansons: li
 def generer(o: Options, log=print, plan_seulement: bool = False) -> list[Path]:
     """Fait le(s) montage(s). Retourne la liste des vidéos produites (une par version)."""
     from legende import legende
+    import licence
     debut_chrono = time.time()
     verifier_ffmpeg()
+    o = licence.appliquer(o)            # version gratuite : Valorant, vertical, 1 version, 30 i/s, marque
     if o.mode == "morts":
         # Coach : plans longs à vitesse normale, le son du jeu bien présent, musique discrète.
         o = dc_replace(o, rythme="fun", hook=False, sequences=False, son_jeu=max(o.son_jeu, 0.8),

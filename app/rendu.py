@@ -30,6 +30,7 @@ class Rendu:
     caster: str = ""           # "" = pas de commentateur, "en" ou "fr"
     instrumental: bool = False  # musique sans paroles pendant que tu parles
     gel: bool = False          # arrêt sur image + contour de l'ennemi au drop
+    marque: bool = False       # « Fait avec AutoClip » (version gratuite)
 
     @property
     def base(self) -> int:
@@ -663,6 +664,16 @@ def assembler(segments: list[Segment], fichiers: list[Path], musique: Path, debu
                       f":x=(w-text_w)/2:y=h*0.16:enable='lt(t,2.5)'")
     if reactions:
         video_fin += "".join("," + f for f in _sous_titres(reactions, r, dossier))
+    if r.marque and r.police is not None:
+        # Version gratuite : petite marque en bas, au-dessus de la zone des boutons de TikTok.
+        from licence import MARQUE
+        f_marque = dossier / "marque.txt"
+        f_marque.write_text(MARQUE, encoding="utf-8")
+        taille = int(r.base * 0.034)
+        y = "h*0.70" if not r.horizontal else "h*0.92"
+        video_fin += (f",drawtext=fontfile='{chemin_filtre(r.police)}':textfile='{chemin_filtre(f_marque)}'"
+                      f":fontsize={taille}:fontcolor=white@0.75:borderw=2:bordercolor=black@0.5"
+                      f":x=(w-text_w)/2:y={y}")
     from chemins import DONNEES as _DONNEES
     logo = _DONNEES / "logo.png"
     if logo.exists():

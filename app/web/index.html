@@ -160,6 +160,14 @@
   .pastille.patreon::before { display: none; }
   .btn.patreon { background: #ff424d; border-color: #ff424d; color: #fff; }
   .bienvenue { border-color: var(--cyan); }
+  .pro-tag { font-size: 10px; font-weight: 800; color: #0e0f13; background: linear-gradient(90deg, var(--cyan), var(--rose));
+    padding: 1px 5px; border-radius: 5px; margin-left: 4px; vertical-align: middle; letter-spacing: .04em; }
+  body.pro .pro-tag { display: none; }
+  .pastille-pro { font: 800 12px system-ui, sans-serif; color: #0e0f13; background: linear-gradient(90deg, var(--cyan), var(--rose));
+    padding: 5px 10px; border-radius: 999px; }
+  .pro-carte { border-color: var(--rose); }
+  .liste-pro { margin: 0 0 14px; padding-left: 20px; color: var(--doux); font-size: 14px; }
+  .puces button.verrou { opacity: .55; }
   .etapes { margin: 0; padding-left: 22px; display: grid; gap: 12px; }
   .etapes li b { display: block; }
   .etapes li span { color: var(--doux); font-size: 14px; }
@@ -173,6 +181,7 @@
     <h1>Auto<span>Clip</span></h1>
     <div class="ligne" style="flex:none;gap:8px;width:auto">
       <button class="pastille patreon cache" id="btnPatreonHaut">♥ Patreon</button>
+      <span class="pastille-pro cache" id="badgePro">PRO</span>
       <div id="connexion" class="pastille">…</div>
     </div>
   </header>
@@ -215,7 +224,7 @@
     <div class="champ">
       <label class="titre">Format</label>
       <div class="segments" data-champ="format">
-        <button data-v="vertical" class="actif">TikTok / Shorts</button><button data-v="youtube">YouTube 16:9 long</button>
+        <button data-v="vertical" class="actif">TikTok / Shorts</button><button data-v="youtube" data-pro="1">YouTube 16:9 long <b class="pro-tag">PRO</b></button>
       </div>
     </div>
 
@@ -289,7 +298,7 @@
     <div class="champ" id="champVersions">
       <label class="titre">Combien de montages</label>
       <div class="segments" data-champ="versions">
-        <button data-v="1" class="actif">1 montage</button><button data-v="3">3 versions au choix</button>
+        <button data-v="1" class="actif">1 montage</button><button data-v="3" data-pro="1">3 versions au choix <b class="pro-tag">PRO</b></button>
       </div>
     </div>
 
@@ -361,12 +370,13 @@
         </div>
         <div class="champ">
           <label class="titre">Images par seconde</label>
-          <div class="segments" data-champ="fps"><button data-v="30" class="actif">30</button><button data-v="60">60</button></div>
+          <div class="segments" data-champ="fps"><button data-v="30" class="actif">30</button><button data-v="60" data-pro="1">60 <b class="pro-tag">PRO</b></button></div>
         </div>
       </details>
     </div>
 
     <button class="btn principal" id="btnGenerer">Générer le montage</button>
+    <p class="astuce" id="infoMarque">Version gratuite : un petit « Fait avec AutoClip » apparaît sur la vidéo. <a href="#" id="lienPro">AutoClip Pro</a> l'enlève.</p>
   </section>
 
   <section class="carte">
@@ -436,6 +446,29 @@
 
   <!-- ============ Onglet Plus ============ -->
   <div id="ongletPlus" class="cache">
+    <section class="carte pro-carte" id="cartePro">
+      <h2>AutoClip Pro</h2>
+      <p class="astuce" style="margin-top:0" id="etatPro"></p>
+      <ul class="liste-pro">
+        <li>Pas de « Fait avec AutoClip » sur tes vidéos</li>
+        <li>Tous tes jeux Medal, pas seulement Valorant</li>
+        <li>Format YouTube 16:9 long</li>
+        <li>3 versions au choix à chaque montage</li>
+        <li>60 images par seconde</li>
+      </ul>
+      <div id="zoneCodePro">
+        <label class="titre" for="codePro">Code Pro (dans le post Patreon réservé aux membres)</label>
+        <div class="ligne">
+          <input type="text" id="codePro" placeholder="AUTOCLIP-PRO-…" autocapitalize="off" autocomplete="off" spellcheck="false">
+          <button class="btn principal petit" id="btnActiverPro" style="flex:none">Activer</button>
+        </div>
+      </div>
+      <div class="ligne" style="margin-top:10px">
+        <button class="btn patreon cache" id="btnDevenirPro">♥ Devenir Pro sur Patreon</button>
+        <button class="btn second petit cache" id="btnDesactiverPro">Retirer le code</button>
+      </div>
+    </section>
+
     <section class="carte patreon-carte" id="cartePatreon">
       <h2>Soutiens AutoClip</h2>
       <p class="astuce" style="margin-top:0">AutoClip est gratuit. S'il te fait gagner du temps, deviens membre Patreon : packs de styles exclusifs, accès aux nouvelles versions avant tout le monde, et tu votes pour les prochaines fonctions.</p>
@@ -617,7 +650,17 @@ document.querySelectorAll(".segments").forEach((g) => {
     choisirSegment(g.dataset.champ, b.dataset.v, true);
   });
 });
+function estPro() { return !!(etat && etat.pro && etat.pro.actif); }
+function proposerPro(quoi) {
+  toast((quoi ? quoi + " : " : "") + "réservé à AutoClip Pro");
+  allerOnglet("Plus"); setTimeout(() => $("cartePro").scrollIntoView({ behavior: "smooth" }), 50);
+}
 function choisirSegment(champ, v, parUtilisateur) {
+  const bouton = document.querySelector(`.segments[data-champ="${champ}"] button[data-v="${v}"]`);
+  if (bouton && bouton.dataset.pro && etat && !estPro()) {
+    if (parUtilisateur) proposerPro(bouton.textContent.replace("PRO", "").trim());
+    return;
+  }
   choix[champ] = String(v);
   document.querySelectorAll(`.segments[data-champ="${champ}"] button`)
     .forEach((b) => b.classList.toggle("actif", b.dataset.v === String(v)));
@@ -727,12 +770,18 @@ function puces(conteneur, liste, ensemble, apres) {
 }
 
 function majJeux() {
-  const liste = $("listeJeux"), cle = JSON.stringify(etat.jeux) + [...jeuxChoisis].join("|");
+  const liste = $("listeJeux"), cle = JSON.stringify(etat.jeux) + [...jeuxChoisis].join("|") + estPro();
   if (liste.dataset.cle === cle) return;
   liste.dataset.cle = cle;
   if (!etat.jeux.length) { liste.innerHTML = '<span class="vide">Aucun clip trouvé</span>'; return; }
+  if (!estPro()) [...jeuxChoisis].forEach((n) => { const j = etat.jeux.find((x) => x.nom === n); if (j && j.pro) jeuxChoisis.delete(n); });
   puces(liste, etat.jeux.map((j) => [j.nom, j.clips]), jeuxChoisis, () => { liste.dataset.cle = ""; majJeux(); });
-  $("infoJeux").textContent = jeuxChoisis.size ? [...jeuxChoisis].join(", ") : "tous";
+  if (!estPro()) liste.querySelectorAll("button").forEach((b, i) => {
+    const j = etat.jeux[i]; if (!j.pro) return;
+    b.classList.add("verrou"); b.insertAdjacentHTML("beforeend", '<b class="pro-tag">PRO</b>');
+    b.onclick = () => proposerPro(j.nom);
+  });
+  $("infoJeux").textContent = jeuxChoisis.size ? [...jeuxChoisis].join(", ") : estPro() ? "tous" : "Valorant";
 }
 
 async function chargerFiltres() {
@@ -866,7 +915,10 @@ async function lancer(corps, bouton) {
     dernierResultat = null; $("lecteur").removeAttribute("src");
     allerOnglet("Montage"); window.scrollTo({ top: 0, behavior: "smooth" });
     rafraichir();
-  } catch (e) { toast(e.message); bouton.disabled = false; }
+  } catch (e) {
+    bouton.disabled = false;
+    if (/AutoClip Pro/.test(e.message)) { proposerPro(""); setTimeout(() => toast(e.message), 400); } else toast(e.message);
+  }
 }
 $("btnGenerer").onclick = () => lancer(corpsMontage(), $("btnGenerer"));
 
@@ -1007,7 +1059,23 @@ async function choisirDossier() {
   } catch (e) { toast(e.message); }
 }
 function majApp() {
-  const l = etat.liens || {}, cap = etat.capacites || {};
+  const l = etat.liens || {}, cap = etat.capacites || {}, pro = etat.pro || {};
+  const actif = !!pro.actif;
+  document.body.classList.toggle("pro", actif);
+  $("badgePro").classList.toggle("cache", !actif);
+  $("infoMarque").classList.toggle("cache", actif);
+  $("zoneCodePro").classList.toggle("cache", actif);
+  $("btnDesactiverPro").classList.toggle("cache", !actif && !pro.expire);
+  $("btnDevenirPro").classList.toggle("cache", actif || !l.patreon);
+  $("etatPro").textContent = actif
+    ? `Pro actif jusqu'au ${pro.expire}${pro.expire_bientot ? " : le code du mois prochain sera sur Patreon." : "."} Merci de soutenir AutoClip !`
+    : pro.expire ? `Ton code a expiré le ${pro.expire}. Le nouveau code est dans le post Patreon réservé aux membres.`
+    : "Les montages Valorant sont complets et gratuits. Pro débloque le reste :";
+  if (!actif) {
+    if (choix.format === "youtube") choisirSegment("format", "vertical");
+    if (choix.versions === "3") choisirSegment("versions", "1");
+    if (choix.fps === "60") choisirSegment("fps", "30");
+  }
   document.querySelectorAll("[data-capacite]").forEach((el) => el.classList.toggle("cache", !cap[el.dataset.capacite]));
   $("btnPatreonHaut").classList.toggle("cache", !l.patreon);
   $("btnPatreon").classList.toggle("cache", !l.patreon);
@@ -1022,7 +1090,17 @@ function majApp() {
   $("etape1").classList.toggle("fait", ok1); $("etape2").classList.toggle("fait", ok2); $("etape3").classList.toggle("fait", ok3);
   $("etape1Info").textContent = ok1 ? "Trouvé : " + etat.clips : "On n'a pas trouvé le dossier où Medal enregistre tes clips.";
 }
-$("btnPatreon").onclick = $("btnPatreonHaut").onclick = () => lien("patreon");
+$("btnPatreon").onclick = $("btnPatreonHaut").onclick = $("btnDevenirPro").onclick = () => lien("patreon");
+$("lienPro").onclick = (e) => { e.preventDefault(); proposerPro(""); };
+$("btnActiverPro").onclick = async () => {
+  try { await api("/api/pro", { action: "activer", code: $("codePro").value }); $("codePro").value = ""; toast("AutoClip Pro activé !");
+        $("listeJeux").dataset.cle = ""; rafraichir(); }
+  catch (e) { toast(e.message); }
+};
+$("btnDesactiverPro").onclick = async () => {
+  if (!(await fenetre({ titre: "Retirer le code Pro ?", texte: "Tu pourras le remettre tant qu'il n'a pas expiré.", oui: "Retirer" }))) return;
+  try { await api("/api/pro", { action: "desactiver" }); $("listeJeux").dataset.cle = ""; rafraichir(); } catch (e) { toast(e.message); }
+};
 $("btnSite").onclick = () => lien("site");
 $("btnDiscord").onclick = () => lien("discord");
 $("btnMaj").onclick = () => lien("mise_a_jour");

@@ -33,6 +33,7 @@ from autoclip import Options, generer, jeux_disponibles
 from outils import ErreurAutoclip
 from chemins import DONNEES, RESSOURCES, VERSION
 import liens
+import licence
 
 CONFIG = DONNEES / "serveur.json"
 PAGE = RESSOURCES / "web" / "index.html"
@@ -406,6 +407,15 @@ class Gestionnaire(BaseHTTPRequestHandler):
                 return self._maj_config(self._lire_json())
             if chemin == "/api/supprimer":
                 return self._supprimer(self._lire_json())
+            if chemin == "/api/pro":
+                d = self._lire_json()
+                if d.get("action") == "desactiver":
+                    licence.desactiver()
+                    return self._json({"ok": True, "pro": licence.etat()})
+                try:
+                    return self._json({"ok": True, "pro": licence.activer(str(d.get("code", "")))})
+                except ValueError as e:
+                    return self._json({"erreur": str(e)}, 400)
             if chemin == "/api/bestof":
                 if not self.tache.lancer(lambda log: sessions.best_of(log=log)):
                     return self._json({"erreur": "Un montage est déjà en cours."}, 409)
@@ -481,9 +491,10 @@ class Gestionnaire(BaseHTTPRequestHandler):
             "version": VERSION,
             "liens": {k: bool(v) for k, v in liens.LIENS.items()},
             "capacites": capacites(),
+            "pro": licence.etat(),
             "mise_a_jour": liens.mise_a_jour_dispo(),
             "index": self.surveillant.etat() if self.surveillant else {},
-            "jeux": [{"nom": j, "clips": n} for j, n in self._jeux().items()],
+            "jeux": [{"nom": j, "clips": n, "pro": not licence.est_jeu_gratuit(j)} for j, n in self._jeux().items()],
         }
 
     def _infos_videos(self, videos: list[Path]) -> dict:
@@ -780,6 +791,16 @@ class Gestionnaire(BaseHTTPRequestHandler):
                     profil=str(d.get("profil") or "")[:40],
                     langue_sous_titres="en" if d.get("langue_sous_titres") == "en" else "fr",
                     filigrane=("@" + self.config["pseudo"]) if d.get("filigrane") and self.config.get("pseudo") else "")
+        if not licence.est_pro():
+            pro = licence.fonctions_pro_demandees(o)
+            if pro:
+                return self._json({"erreur": "Réservé à AutoClip Pro : " + ", ".join(pro)
+                                   + ". Deviens membre Patreon pour le débloquer.", "pro": True}, 402)
+            if not o.jeux:
+                if not any(licence.est_jeu_gratuit(j) for j in connus):
+                    return self._json({"erreur": "Aucun clip Valorant trouvé. Les autres jeux sont dans "
+                                       "AutoClip Pro (Patreon).", "pro": True}, 402)
+                o.jeux = [j for j in connus if licence.est_jeu_gratuit(j)]
         if not self.tache.lancer(o):
             return self._json({"erreur": "Un montage est déjà en cours."}, 409)
         # Mémorise les réglages pour la prochaine fois.

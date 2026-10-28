@@ -14,3 +14,4 @@ app/clips_amis/
 app/morts.json
 app/voix_fortes.json
 *.log
+cle_privee*.txt

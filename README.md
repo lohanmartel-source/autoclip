@@ -22,6 +22,8 @@ Tes montages vont dans `Vidéos\AutoClip`, tes musiques dans `Musique\AutoClip`.
 | `app/` | Le code de l'app (Python). `app.py` ouvre la fenêtre, `serveur.py` est l'API locale, `web/index.html` l'interface. |
 | `app/autoclip.py` | Le moteur de montage (aussi utilisable en ligne de commande). |
 | `build/` | Tout pour fabriquer l'installateur Windows. |
+| `docs/` | Le site (GitHub Pages : Settings > Pages > branche main, dossier /docs). |
+| `outils/` | `creer_code_pro.py` : le code Pro du mois. |
 | `.github/workflows/build.yml` | Construit l'installateur automatiquement à chaque tag `v*`. |
 
 ## Lancer depuis le code
@@ -52,6 +54,20 @@ git push origin v1.0.0
 1. `app/chemins.py` : `VERSION`.
 2. `app/liens.py` : lien Patreon, site, Discord, et `DEPOT_GITHUB` (pour le bouton « Mettre à jour »).
 3. `build/installateur.iss` et `build/version_info.txt` : même numéro de version.
+
+## AutoClip Pro (Patreon)
+
+La version gratuite fait des montages Valorant complets, avec un petit « Fait avec AutoClip » sur la vidéo.
+Pro enlève cette marque et débloque les autres jeux, le format YouTube 16:9, les 3 versions et le 60 i/s.
+Rien de ce qui touche à Valorant n'est payant (règles de Riot Games).
+
+Les membres activent Pro avec un **code du mois** (onglet Plus de l'app). Pour le fabriquer :
+```
+python outils/creer_code_pro.py
+```
+Le code est valide jusqu'au 7 du mois suivant. Mets-le dans un post Patreon réservé aux paliers Pro.
+Le script lit la clé privée dans `Documents\AutoClip-prive\cle_privee_autoclip.txt`.
+**Cette clé ne doit jamais aller sur GitHub** : avec elle, n'importe qui pourrait fabriquer des codes.
 
 ## Packs de styles (bonus Patreon)
 
