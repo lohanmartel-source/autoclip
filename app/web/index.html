@@ -1,0 +1,1259 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#0e0f13">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="AutoClip">
+<link rel="manifest" href="/manifest.json">
+<link rel="icon" href="/icone.svg">
+<link rel="apple-touch-icon" href="/icone.svg">
+<title>AutoClip</title>
+<style>
+  :root {
+    --fond: #0e0f13; --carte: #171920; --carte2: #1f222b; --bord: #2a2e3a;
+    --texte: #e9eaf0; --doux: #9aa0b4; --rose: #ff3d6e; --cyan: #25f4ee; --rouge: #ff5a5a; --jaune: #ffe14d;
+  }
+  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  html, body { margin: 0; background: var(--fond); color: var(--texte);
+    font: 16px/1.4 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
+  main { max-width: 560px; margin: 0 auto; padding: calc(8px + env(safe-area-inset-top)) 16px calc(96px + env(safe-area-inset-bottom)); }
+  header { display: flex; align-items: center; justify-content: space-between; padding: 8px 0 16px; }
+  h1 { font-size: 24px; margin: 0; letter-spacing: -0.02em; }
+  h1 span { background: linear-gradient(90deg, var(--cyan), var(--rose)); -webkit-background-clip: text;
+    background-clip: text; color: transparent; }
+  h2 { font-size: 15px; margin: 0 0 12px; color: var(--doux); font-weight: 600; letter-spacing: .02em; }
+  .pastille { font-size: 13px; color: var(--doux); display: flex; align-items: center; gap: 6px; }
+  .pastille::before { content: ""; width: 8px; height: 8px; border-radius: 50%; background: var(--doux); }
+  .pastille.ok::before { background: #3ddc84; } .pastille.ko::before { background: var(--rouge); }
+  .carte { background: var(--carte); border: 1px solid var(--bord); border-radius: 18px; padding: 16px; margin-bottom: 14px; }
+  .champ { margin-bottom: 16px; } .champ:last-child { margin-bottom: 0; }
+  label.titre { display: flex; justify-content: space-between; font-size: 14px; color: var(--doux); margin-bottom: 8px; }
+  label.titre b { color: var(--texte); font-weight: 600; }
+  select, input[type=text], input[type=number], textarea { width: 100%; background: var(--carte2); color: var(--texte);
+    border: 1px solid var(--bord); border-radius: 12px; padding: 12px; font: inherit; min-height: 48px; }
+  textarea { min-height: 120px; resize: vertical; font-size: 15px; }
+  .ligne { display: flex; gap: 8px; } .ligne > * { flex: 1; min-width: 0; }
+  input[type=range] { width: 100%; accent-color: var(--rose); height: 32px; }
+  .segments { display: flex; background: var(--carte2); border: 1px solid var(--bord); border-radius: 12px; padding: 4px; gap: 4px; }
+  .segments button { flex: 1; border: 0; background: transparent; color: var(--doux); font: inherit; font-size: 14px;
+    padding: 10px 2px; border-radius: 9px; min-height: 42px; }
+  .segments button.actif { background: var(--texte); color: var(--fond); font-weight: 600; }
+  .bascule { display: flex; align-items: center; justify-content: space-between; min-height: 44px; gap: 12px; }
+  .bascule small { display: block; color: var(--doux); font-size: 13px; }
+  .bascule input { flex: none; width: 52px; height: 30px; appearance: none; -webkit-appearance: none; background: var(--bord); border-radius: 15px; position: relative; transition: .2s; }
+  .bascule input::after { content: ""; position: absolute; top: 3px; left: 3px; width: 24px; height: 24px; border-radius: 50%; background: #fff; transition: .2s; }
+  .bascule input:checked { background: var(--rose); } .bascule input:checked::after { left: 25px; }
+  .btn { display: flex; align-items: center; justify-content: center; gap: 8px; width: 100%; border: 0; border-radius: 14px;
+    font: inherit; font-weight: 700; min-height: 54px; padding: 0 16px; color: #fff; text-decoration: none; }
+  .btn.principal { background: linear-gradient(90deg, var(--rose), #ff6a3d); font-size: 18px; }
+  .btn:disabled { opacity: .45; }
+  .btn.second { background: var(--carte2); border: 1px solid var(--bord); color: var(--texte); font-weight: 600; min-height: 48px; }
+  .btn.danger { background: var(--rouge); }
+  .btn.petit { min-height: 40px; font-size: 14px; width: auto; }
+  button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible { outline: 2px solid var(--cyan); outline-offset: 2px; }
+  details summary { cursor: pointer; color: var(--doux); font-size: 14px; padding: 4px 0; list-style: none; }
+  details summary::-webkit-details-marker { display: none; }
+  details summary::before { content: "▸ "; } details[open] summary::before { content: "▾ "; }
+  details[open] summary { margin-bottom: 12px; }
+  .barre { height: 10px; background: var(--carte2); border-radius: 5px; overflow: hidden; margin: 10px 0 8px; }
+  .barre div { height: 100%; width: 0; background: linear-gradient(90deg, var(--cyan), var(--rose)); transition: width .6s; }
+  .info { display: flex; justify-content: space-between; font-size: 14px; color: var(--doux); }
+  pre { background: #0a0b0e; border-radius: 10px; padding: 10px; font-size: 11.5px; max-height: 220px; overflow: auto;
+    white-space: pre-wrap; word-break: break-word; color: #b9bfd0; margin: 8px 0 0; }
+  video { width: 100%; border-radius: 14px; background: #000; max-height: 70vh; display: block; margin-bottom: 10px; }
+  .video-item { display: flex; align-items: center; gap: 8px; padding: 10px 0; border-top: 1px solid var(--bord); flex-wrap: wrap; }
+  .video-item:first-of-type { border-top: 0; }
+  .video-item .nom { flex: 1; min-width: 120px; font-size: 14px; }
+  .video-item .mini { width: 40px; height: 71px; object-fit: cover; border-radius: 8px; flex: none; background: var(--carte2); }
+  .video-item .mini.large { width: 71px; height: 40px; }
+  .video-item .nom small { display: block; color: var(--doux); }
+  .video-item .actions { display: flex; gap: 6px; flex-wrap: wrap; }
+  .icone { width: 42px; height: 42px; border-radius: 12px; border: 1px solid var(--bord); background: var(--carte2);
+    color: var(--texte); display: grid; place-items: center; font-size: 16px; text-decoration: none; flex: none; font-family: inherit; }
+  .icone.danger { color: var(--rouge); } .icone.confirmer { background: var(--rouge); color: #fff; border-color: var(--rouge); }
+  .icone.texte { width: auto; padding: 0 12px; font-size: 13px; font-weight: 600; }
+  .erreur { background: #2a1418; border: 1px solid #5a2430; color: #ffb3c0; border-radius: 12px; padding: 12px; font-size: 14px; white-space: pre-wrap; }
+  .vide { color: var(--doux); font-size: 14px; text-align: center; padding: 8px 0; }
+  .toast { position: fixed; left: 50%; bottom: calc(88px + env(safe-area-inset-bottom)); transform: translateX(-50%) translateY(160px);
+    background: var(--texte); color: var(--fond); padding: 12px 18px; border-radius: 12px; font-weight: 600; transition: .3s;
+    max-width: calc(100% - 32px); z-index: 30; }
+  .toast.visible { transform: translateX(-50%) translateY(0); }
+  .cache { display: none !important; }
+  .puces { display: flex; flex-wrap: wrap; gap: 8px; }
+  .puces button { border: 1px solid var(--bord); background: var(--carte2); color: var(--doux); font: inherit; font-size: 14px;
+    padding: 9px 14px; border-radius: 999px; min-height: 40px; }
+  .puces button.actif { background: var(--texte); color: var(--fond); border-color: var(--texte); font-weight: 600; }
+  .puces button small { opacity: .6; margin-left: 4px; }
+  .astuce { font-size: 13px; color: var(--doux); margin-top: 8px; }
+
+  /* Barre d'onglets en bas (comme une app) */
+  nav.onglets { position: fixed; left: 0; right: 0; bottom: 0; z-index: 20; display: flex; justify-content: center;
+    background: rgba(14,15,19,.94); backdrop-filter: blur(14px); -webkit-backdrop-filter: blur(14px);
+    border-top: 1px solid var(--bord); padding: 6px 8px calc(6px + env(safe-area-inset-bottom)); }
+  nav.onglets .dedans { display: flex; width: 100%; max-width: 560px; }
+  nav.onglets button { flex: 1; background: none; border: 0; color: var(--doux); font: inherit; font-size: 12px; padding: 6px 0;
+    display: flex; flex-direction: column; align-items: center; gap: 3px; min-height: 52px; }
+  nav.onglets button svg { width: 24px; height: 24px; stroke: currentColor; fill: none; stroke-width: 1.9; stroke-linecap: round; stroke-linejoin: round; }
+  nav.onglets button.actif { color: var(--texte); }
+  nav.onglets button.actif svg { stroke: var(--rose); }
+
+  /* Mes kills */
+  .grille { display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px; }
+  .kill { position: relative; border-radius: 12px; overflow: hidden; background: var(--carte2); border: 2px solid transparent;
+    padding: 0; color: inherit; font: inherit; text-align: left; }
+  .kill img { width: 100%; aspect-ratio: 16/9; object-fit: cover; display: block; background: #000; }
+  .kill .legende { padding: 6px 8px 8px; font-size: 12.5px; line-height: 1.3; }
+  .kill .legende b { font-size: 14px; }
+  .kill .legende .sous { color: var(--doux); display: block; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .kill.choisi { border-color: var(--cyan); }
+  .kill .coche { position: absolute; top: 6px; left: 6px; width: 26px; height: 26px; border-radius: 50%; background: rgba(0,0,0,.55);
+    border: 2px solid #fff; display: grid; place-items: center; font-size: 15px; color: #000; }
+  .kill.choisi .coche { background: var(--cyan); border-color: var(--cyan); }
+  .kill .etoile { position: absolute; top: 4px; right: 4px; width: 36px; height: 36px; border-radius: 50%; border: 0;
+    background: rgba(0,0,0,.55); color: #fff; font-size: 18px; display: grid; place-items: center; }
+  .kill.drop .etoile { background: var(--jaune); color: #000; }
+  .tag { display: inline-block; font-size: 11px; font-weight: 700; padding: 2px 6px; border-radius: 6px; background: var(--rose); color: #fff; margin-right: 4px; }
+  .tag.cyan { background: var(--cyan); color: #000; }
+  .barre-choix { position: fixed; left: 0; right: 0; bottom: calc(66px + env(safe-area-inset-bottom)); z-index: 15; padding: 10px 16px;
+    display: flex; justify-content: center; }
+  .barre-choix .dedans { width: 100%; max-width: 528px; background: var(--carte); border: 1px solid var(--bord); border-radius: 16px;
+    padding: 10px; display: flex; gap: 10px; align-items: center; box-shadow: 0 10px 30px rgba(0,0,0,.5); }
+  .barre-choix .resume { flex: 1; font-size: 13px; color: var(--doux); } .barre-choix .resume b { color: var(--texte); font-size: 15px; display: block; }
+  .barre-choix .btn { width: auto; min-height: 46px; font-size: 15px; }
+
+  /* Stats */
+  .tuiles { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+  .tuile { background: var(--carte2); border-radius: 12px; padding: 10px; }
+  .tuile b { display: block; font-size: 24px; letter-spacing: -0.02em; }
+  .tuile span { font-size: 12.5px; color: var(--doux); }
+  .tuile.forte { grid-column: span 3; display: flex; align-items: baseline; gap: 10px; background: linear-gradient(120deg, #1d2030, #261827); }
+  .tuile.forte b { font-size: 44px; }
+  .histo { display: flex; align-items: flex-end; gap: 2px; height: 130px; padding-top: 8px; }
+  .histo div { flex: 1; background: var(--rose); border-radius: 3px 3px 0 0; min-height: 2px; position: relative; }
+  .histo div.zero { background: var(--bord); }
+  .histo div.aujourdhui { background: var(--cyan); }
+  .axe { display: flex; justify-content: space-between; font-size: 11.5px; color: var(--doux); margin-top: 4px; }
+  .rang { display: flex; align-items: center; gap: 10px; font-size: 14px; margin: 7px 0; }
+  .rang .nom { width: 96px; flex: none; }
+  .rang .jauge { flex: 1; height: 10px; background: var(--carte2); border-radius: 5px; overflow: hidden; }
+  .rang .jauge div { height: 100%; background: linear-gradient(90deg, var(--cyan), var(--rose)); }
+  .rang .n { width: 36px; text-align: right; color: var(--doux); font-variant-numeric: tabular-nums; }
+
+  /* Ménage */
+  .menage-item { display: flex; align-items: center; gap: 10px; padding: 8px 0; border-top: 1px solid var(--bord); }
+  .menage-item:first-child { border-top: 0; }
+  .menage-item img { width: 96px; aspect-ratio: 16/9; object-fit: cover; border-radius: 8px; background: #000; flex: none; }
+  .menage-item .nom { flex: 1; min-width: 0; font-size: 13px; } .menage-item .nom small { color: var(--doux); display: block; }
+  .menage-item input { width: 24px; height: 24px; accent-color: var(--rose); flex: none; }
+
+  /* Fenêtre de confirmation / légende */
+  .voile { position: fixed; inset: 0; background: rgba(0,0,0,.6); z-index: 40; display: flex; align-items: flex-end; justify-content: center; padding: 16px; }
+  .fenetre { width: 100%; max-width: 528px; background: var(--carte); border: 1px solid var(--bord); border-radius: 20px; padding: 18px;
+    margin-bottom: env(safe-area-inset-bottom); }
+  .fenetre h3 { margin: 0 0 8px; font-size: 18px; }
+  .fenetre p { margin: 0 0 14px; color: var(--doux); font-size: 15px; }
+  .pastille.patreon { background: #ff424d; color: #fff; border: 0; cursor: pointer; font: 700 13px system-ui, sans-serif;
+    padding: 6px 12px; border-radius: 999px; white-space: nowrap; }
+  .pastille.patreon::before { display: none; }
+  .btn.patreon { background: #ff424d; border-color: #ff424d; color: #fff; }
+  .bienvenue { border-color: var(--cyan); }
+  .etapes { margin: 0; padding-left: 22px; display: grid; gap: 12px; }
+  .etapes li b { display: block; }
+  .etapes li span { color: var(--doux); font-size: 14px; }
+  .etapes li.fait b::after { content: " ✓"; color: var(--cyan); }
+  @media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
+</style>
+</head>
+<body>
+<main>
+  <header>
+    <h1>Auto<span>Clip</span></h1>
+    <div class="ligne" style="flex:none;gap:8px;width:auto">
+      <button class="pastille patreon cache" id="btnPatreonHaut">♥ Patreon</button>
+      <div id="connexion" class="pastille">…</div>
+    </div>
+  </header>
+
+  <!-- Montage en cours / résultat (visible sur tous les onglets) -->
+  <section id="carteTache" class="carte cache">
+    <h2 id="titreTache">Montage en cours</h2>
+    <div id="zoneProgression">
+      <div class="info"><span id="etape">…</span><span id="chrono">0 s</span></div>
+      <div class="barre"><div id="barre"></div></div>
+    </div>
+    <div id="zoneErreur" class="erreur cache"></div>
+    <div id="zoneResultat" class="cache">
+      <video id="lecteur" controls playsinline preload="metadata"></video>
+      <button id="btnVoirDossier" class="btn principal">Voir dans l'Explorateur</button>
+      <div class="ligne" style="margin-top:8px">
+        <button class="btn second" id="btnLegendeResultat">Légende + hashtags</button>
+        <button class="btn second cache" id="btnFinaliserResultat">Faire la version finale</button>
+      </div>
+      <p class="astuce">Glisse la vidéo de l'Explorateur dans TikTok, YouTube Shorts ou Instagram. La légende + hashtags est prête à copier.</p>
+    </div>
+    <details id="detailsJournal"><summary>Détails</summary><pre id="journal"></pre></details>
+  </section>
+
+  <!-- ============ Onglet Montage ============ -->
+  <div id="ongletMontage">
+  <section class="carte bienvenue cache" id="carteBienvenue">
+    <h2>Bienvenue dans AutoClip</h2>
+    <p class="astuce" style="margin-top:0">3 étapes et ton premier montage est prêt :</p>
+    <ol class="etapes">
+      <li id="etape1"><b>Tes clips Medal</b><span id="etape1Info">On cherche le dossier où Medal enregistre tes clips.</span>
+        <div class="ligne" style="margin-top:8px"><button class="btn second petit" id="btnDetecter">Trouver tout seul</button><button class="btn second petit" id="btnChoisir1">Choisir le dossier…</button></div></li>
+      <li id="etape2"><b>Une musique</b><span>Ajoute une chanson (mp3, m4a, wav) avec « + Ajouter » plus bas. Prends de la musique libre de droits si tu publies.</span></li>
+      <li id="etape3"><b>Générer</b><span>Touche « Générer le montage ». AutoClip trouve tes meilleurs kills et les cale sur le beat.</span></li>
+    </ol>
+  </section>
+  <section class="carte">
+    <h2>Nouveau montage</h2>
+
+    <div class="champ">
+      <label class="titre">Format</label>
+      <div class="segments" data-champ="format">
+        <button data-v="vertical" class="actif">TikTok / Shorts</button><button data-v="youtube">YouTube 16:9 long</button>
+      </div>
+    </div>
+
+    <div class="champ">
+      <label class="titre">Type de montage</label>
+      <div class="segments" data-champ="mode">
+        <button data-v="kills" class="actif">Kills</button><button data-v="fun">Fails</button><button data-v="morts">Mes morts</button><button data-v="equipe">Équipe</button>
+      </div>
+      <p class="astuce cache" id="infoFun"></p>
+    </div>
+
+    <div class="champ">
+      <label class="titre">Musique</label>
+      <div class="ligne">
+        <select id="musique"><option value="">Aucune musique</option></select>
+        <button class="btn second petit" id="btnAjouter" style="flex:none">+ Ajouter</button>
+      </div>
+      <input type="file" id="fichierMusique" accept="audio/*,.mp3,.m4a,.wav,.ogg,.flac,.aac,.opus" class="cache">
+      <div id="envoi" class="cache"><div class="barre"><div id="barreEnvoi"></div></div></div>
+    </div>
+
+    <div class="champ">
+      <label class="titre">Style</label>
+      <div class="segments" data-champ="style">
+        <button data-v="auto" class="actif">Auto</button><button data-v="phonk">Phonk</button><button data-v="cinematique">Ciné</button><button data-v="clean">Clean</button>
+      </div>
+      <p class="astuce" id="infoStyle">Le mélange habituel d'AutoClip.</p>
+    </div>
+
+    <div class="champ">
+      <label class="titre">Copier le style d'une vidéo</label>
+      <div class="ligne">
+        <select id="profil"><option value="">Aucun</option></select>
+        <button class="btn second petit" id="btnCopierStyle" style="flex:none">+ Vidéo</button>
+      </div>
+      <input type="file" id="fichierStyle" accept="video/*" class="cache">
+      <div id="envoiStyle" class="cache"><div class="barre"><div id="barreStyle"></div></div></div>
+      <p class="astuce" id="infoProfil">Choisis un TikTok que tu aimes (enregistré sur ton PC) : AutoClip copie son rythme de coupes et ses flashs. Les membres Patreon reçoivent aussi des packs de styles prêts à importer.</p>
+    </div>
+
+    <div class="champ">
+      <label class="titre">Clips de</label>
+      <div class="segments" data-champ="periode">
+        <button data-v="" class="actif">Tout</button><button data-v="session">Ma session</button><button data-v="jour">24 h</button><button data-v="semaine">7 jours</button>
+      </div>
+    </div>
+
+    <div class="champ">
+      <label class="titre">Jeux <b id="infoJeux">tous</b></label>
+      <div class="puces" id="listeJeux"><span class="vide">Chargement…</span></div>
+    </div>
+
+    <div class="champ">
+      <label class="titre">Kills à montrer</label>
+      <div class="segments" data-champ="filtre">
+        <button data-v="tous" class="actif">Tous</button><button data-v="onetap">One taps</button><button data-v="multi">3K+</button><button data-v="ace">Ace</button>
+      </div>
+    </div>
+
+    <div class="champ">
+      <details id="detailsArmes">
+        <summary>Seulement une arme ou un agent <b id="infoArmes"></b></summary>
+        <label class="titre">Armes</label>
+        <div class="puces" id="listeArmes"><span class="vide">Analyse de tes clips en cours…</span></div>
+        <label class="titre" style="margin-top:14px">Agents</label>
+        <div class="puces" id="listeAgents"><span class="vide">…</span></div>
+        <p class="astuce">Reconnus sur ton PC dans le fil des kills (rien n'est envoyé sur internet).</p>
+      </details>
+    </div>
+
+    <div class="champ" id="champVersions">
+      <label class="titre">Combien de montages</label>
+      <div class="segments" data-champ="versions">
+        <button data-v="1" class="actif">1 montage</button><button data-v="3">3 versions au choix</button>
+      </div>
+    </div>
+
+    <div class="champ">
+      <label class="titre">Durée <b id="valDuree">20 s</b></label>
+      <input type="range" id="duree" min="8" max="60" step="1" value="20">
+    </div>
+
+    <div class="champ">
+      <label class="titre">Rythme des coupes</label>
+      <div class="segments" data-champ="rythme">
+        <button data-v="calme">Calme</button><button data-v="normal" class="actif">Normal</button><button data-v="nerveux">Nerveux</button>
+      </div>
+    </div>
+
+    <div class="champ">
+      <label class="titre">Cadrage</label>
+      <div class="segments" data-champ="cadrage">
+        <button data-v="flou" class="actif">Fond flou</button><button data-v="crop">Plein écran</button><button data-v="ecran_partage">Zoom viseur</button>
+      </div>
+    </div>
+
+    <div class="champ">
+      <label class="titre">Son du jeu <b id="valSon">30 %</b></label>
+      <input type="range" id="son_jeu" min="0" max="100" step="5" value="30">
+    </div>
+
+    <div class="champ">
+      <label class="titre">Texte d'accroche</label>
+      <input type="text" id="texte" maxlength="40" placeholder="ex. 1v4 CLUTCH (optionnel)">
+    </div>
+
+    <div class="champ bascule"><span>Compteur de kills à l'écran</span><input type="checkbox" id="compteur" checked></div>
+    <div class="champ bascule"><span>Effets sonores<small>whoosh, boom sur le drop, montée avant le drop</small></span><input type="checkbox" id="effets_sonores" checked></div>
+    <div class="champ bascule"><span>Ton pseudo à la fin<small id="infoOutro">Écris ton pseudo dans l'onglet Plus</small></span><input type="checkbox" id="outro" checked></div>
+    <div class="champ bascule"><span>Ralenti au drop</span><input type="checkbox" id="ralenti" checked></div>
+    <div class="champ bascule"><span>Textes sur les kills (ONE TAP, ACE…)</span><input type="checkbox" id="textes" checked></div>
+    <div class="champ bascule"><span>Multi-kills rapides en entier</span><input type="checkbox" id="sequences" checked></div>
+    <div class="champ bascule"><span>Intro : teaser + rewind</span><input type="checkbox" id="hook" checked></div>
+    <div class="champ bascule"><span>Mes réactions au micro</span><input type="checkbox" id="voix" checked></div>
+    <div class="champ bascule" data-capacite="sous_titres"><span>Sous-titres de ma voix</span><input type="checkbox" id="sous_titres" checked></div>
+    <div class="champ" data-capacite="sous_titres">
+      <label class="titre">Langue des sous-titres</label>
+      <div class="segments" data-champ="langue_sous_titres">
+        <button data-v="fr" class="actif">Ce que je dis</button><button data-v="en">Traduits en anglais</button>
+      </div>
+    </div>
+    <div class="champ" data-capacite="caster">
+      <label class="titre">Commentateur sur les gros kills</label>
+      <div class="segments" data-champ="caster">
+        <button data-v="" class="actif">Aucun</button><button data-v="en">Anglais</button><button data-v="fr">Français</button>
+      </div>
+    </div>
+    <div class="champ bascule"><span>Arrêt sur image au drop<small>L'image se fige, l'ennemi ressort avec un contour lumineux</small></span><input type="checkbox" id="arret_image" checked></div>
+    <div class="champ bascule" data-capacite="instrumental"><span>Musique sans paroles quand je parle<small>La voix du chanteur s'efface derrière la tienne (1 min d'analyse par nouvelle chanson)</small></span><input type="checkbox" id="instrumental" checked></div>
+    <div class="champ bascule"><span>Mon pseudo en filigrane<small>En petit en haut à droite. Mets un fichier logo.png dans le dossier de données d'AutoClip (onglet Plus) pour utiliser ton logo.</small></span><input type="checkbox" id="filigrane"></div>
+    <div class="champ bascule"><span>Aperçu rapide d'abord<small>Basse qualité en 30 s ; si ça te plaît, « Faire la version finale »</small></span><input type="checkbox" id="apercu"></div>
+
+    <div class="champ">
+      <details>
+        <summary>Options avancées</summary>
+        <div class="champ">
+          <label class="titre">Début de la musique (secondes)</label>
+          <input type="number" id="debut_musique" inputmode="decimal" min="0" placeholder="Auto (avant le drop)">
+        </div>
+        <div class="champ">
+          <label class="titre">Clips récents analysés <b id="valDerniers">25</b></label>
+          <input type="range" id="derniers" min="5" max="200" step="5" value="25">
+        </div>
+        <div class="champ">
+          <label class="titre">Images par seconde</label>
+          <div class="segments" data-champ="fps"><button data-v="30" class="actif">30</button><button data-v="60">60</button></div>
+        </div>
+      </details>
+    </div>
+
+    <button class="btn principal" id="btnGenerer">Générer le montage</button>
+  </section>
+
+  <section class="carte">
+    <h2>Mes montages</h2>
+    <div id="listeVideos"><p class="vide">Aucun montage pour l'instant.</p></div>
+  </section>
+  </div>
+
+  <!-- ============ Onglet Mes kills ============ -->
+  <div id="ongletKills" class="cache">
+    <section class="carte">
+      <h2>Choisis tes kills</h2>
+      <p class="astuce" style="margin-top:0">Touche un kill pour le prendre. ★ = celui qui tombe sur le drop. Les réglages de l'onglet Montage (musique, style…) sont gardés.</p>
+      <div class="champ">
+        <div class="segments" data-champ="joursKills">
+          <button data-v="1" class="actif">24 h</button><button data-v="7">7 jours</button><button data-v="30">30 jours</button><button data-v="0">Tout</button>
+        </div>
+      </div>
+      <div class="champ">
+        <div class="puces" id="filtreKills"></div>
+      </div>
+      <p class="astuce" id="infoKills"></p>
+    </section>
+    <div class="grille" id="grilleKills"></div>
+    <div style="height:90px"></div>
+  </div>
+
+  <!-- ============ Onglet Stats ============ -->
+  <div id="ongletStats" class="cache">
+    <section class="carte">
+      <div class="tuiles" id="tuiles"></div>
+    </section>
+    <section class="carte">
+      <h2>Kills par jour (30 jours)</h2>
+      <div class="histo" id="histoJours"></div>
+      <div class="axe"><span id="axeDebut"></span><span>aujourd'hui</span></div>
+      <p class="astuce" id="meilleurJour"></p>
+    </section>
+    <section class="carte">
+      <h2>Par semaine</h2>
+      <div class="histo" id="histoSemaines" style="height:100px"></div>
+      <div class="axe"><span id="axeSemaineDebut"></span><span>cette semaine</span></div>
+    </section>
+    <section class="carte">
+      <h2>Tes armes</h2>
+      <div id="rangArmes"></div>
+    </section>
+    <section class="carte">
+      <h2>Tes agents</h2>
+      <div id="rangAgents"></div>
+    </section>
+    <section class="carte">
+      <h2>Défi entre amis (cette semaine)</h2>
+      <div id="zoneDefi"><p class="vide">Chargement…</p></div>
+    </section>
+    <section class="carte">
+      <h2>Coach : tes morts (30 jours)</h2>
+      <div id="zoneCoach"><p class="vide">Chargement…</p></div>
+    </section>
+    <section class="carte">
+      <h2>Mes parties</h2>
+      <p class="astuce" style="margin-top:0">Une carte à partager pour chaque partie : tes kills clippés, ton meilleur round, ton agent et tes armes.</p>
+      <div id="listeMatchs"></div>
+    </section>
+    <p class="astuce" id="infoStats" style="text-align:center"></p>
+  </div>
+
+  <!-- ============ Onglet Plus ============ -->
+  <div id="ongletPlus" class="cache">
+    <section class="carte patreon-carte" id="cartePatreon">
+      <h2>Soutiens AutoClip</h2>
+      <p class="astuce" style="margin-top:0">AutoClip est gratuit. S'il te fait gagner du temps, deviens membre Patreon : packs de styles exclusifs, accès aux nouvelles versions avant tout le monde, et tu votes pour les prochaines fonctions.</p>
+      <div class="ligne">
+        <button class="btn principal patreon" id="btnPatreon">♥ Rejoindre le Patreon</button>
+        <button class="btn second" id="btnImporterPack">Importer un pack de styles</button>
+      </div>
+      <input type="file" id="fichierPack" accept=".json,application/json" class="cache">
+      <p class="astuce" id="infoPack"></p>
+    </section>
+
+    <section class="carte">
+      <h2>Automatique</h2>
+      <div class="champ bascule"><span>Montage auto après chaque session<small>45 min après ton dernier clip, avec tes réglages, pendant qu'AutoClip est ouvert</small></span><input type="checkbox" id="autoSession"></div>
+      <div class="ligne">
+        <button class="btn second" id="btnSession">Montage de ma dernière session</button>
+        <button class="btn second" id="btnBestOf">Best-of de la semaine</button>
+      </div>
+      <p class="astuce" id="etatIndex"></p>
+    </section>
+
+    <section class="carte">
+      <h2>Ménage des clips Medal</h2>
+      <p class="astuce" style="margin-top:0">Clips où Medal n'a enregistré aucun kill (souvent toi qui marches). Rien n'est effacé sans que tu coches et confirmes, et les clips vont dans la Corbeille du PC : tu peux les récupérer. Les favoris et les clips de moins de 2 jours ne sont jamais proposés.</p>
+      <button class="btn second" id="btnMenage">Chercher les clips sans kill</button>
+      <div id="zoneMenage" class="cache" style="margin-top:12px">
+        <div class="info" style="margin-bottom:8px"><span id="infoMenage"></span><button class="btn second petit" id="btnToutCocher">Tout cocher</button></div>
+        <div id="listeMenage"></div>
+        <button class="btn danger" id="btnCorbeille" style="margin-top:12px" disabled>Mettre à la corbeille</button>
+      </div>
+    </section>
+
+    <section class="carte">
+      <h2>Réglages</h2>
+      <div class="champ">
+        <label class="titre">Ton pseudo (affiché à la fin des montages)</label>
+        <input type="text" id="pseudo" maxlength="30" placeholder="ton pseudo" autocapitalize="off" autocomplete="off" spellcheck="false">
+      </div>
+      <div class="champ">
+        <label class="titre">Dossier des clips Medal</label>
+        <div class="ligne">
+          <input type="text" id="dossierClips" placeholder="ex. C:\Medal" autocapitalize="off" autocomplete="off" spellcheck="false">
+          <button class="btn second petit" id="btnChoisir2" style="flex:none">Choisir…</button>
+        </div>
+        <p class="astuce">Dans Medal : Paramètres → Recording → Capture Folder Location.</p>
+      </div>
+      <button class="btn second" id="btnClips">Enregistrer</button>
+      <p class="astuce" id="infoSortie"></p>
+      <button class="btn second petit" id="btnOuvrirSortie">Ouvrir le dossier des montages</button>
+    </section>
+
+    <section class="carte">
+      <h2>À propos</h2>
+      <p class="astuce" style="margin-top:0" id="infoVersion"></p>
+      <div class="ligne">
+        <button class="btn second petit cache" id="btnSite">Site web</button>
+        <button class="btn second petit cache" id="btnDiscord">Discord</button>
+        <button class="btn principal petit cache" id="btnMaj">Mettre à jour</button>
+      </div>
+      <p class="astuce">AutoClip n'est pas affilié à Riot Games ni à Medal. Valorant est une marque de Riot Games, Inc. Tout se passe sur ton PC : tes clips ne sont envoyés nulle part (sauf les stats du défi entre amis, si tu le rejoins).</p>
+    </section>
+  </div>
+</main>
+
+<div class="barre-choix cache" id="barreChoix">
+  <div class="dedans">
+    <div class="resume"><b id="nbChoisis">0 kill</b><span id="infoDrop">Touche ★ pour choisir le drop</span></div>
+    <button class="btn second petit" id="btnViderChoix">Vider</button>
+    <button class="btn principal" id="btnGenererChoix">Monter</button>
+  </div>
+</div>
+
+<nav class="onglets" aria-label="Sections">
+  <div class="dedans">
+    <button data-onglet="Montage" class="actif"><svg viewBox="0 0 24 24"><rect x="5" y="3" width="14" height="18" rx="3"/><path d="M10 9v6l5-3z"/></svg>Montage</button>
+    <button data-onglet="Kills"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="8"/><circle cx="12" cy="12" r="2"/><path d="M12 2v4M12 18v4M2 12h4M18 12h4"/></svg>Mes kills</button>
+    <button data-onglet="Stats"><svg viewBox="0 0 24 24"><path d="M4 20V10M10 20V4M16 20v-7M22 20H2"/></svg>Stats</button>
+    <button data-onglet="Plus"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/></svg>Plus</button>
+  </div>
+</nav>
+
+<div class="voile cache" id="voile"><div class="fenetre">
+  <h3 id="fenTitre"></h3>
+  <p id="fenTexte"></p>
+  <textarea id="fenZone" class="cache" readonly></textarea>
+  <div class="ligne" style="margin-top:12px">
+    <button class="btn second" id="fenNon">Annuler</button>
+    <button class="btn principal" id="fenOui">OK</button>
+  </div>
+</div></div>
+<div class="toast" id="toast"></div>
+
+<script>
+const $ = (id) => document.getElementById(id);
+const choix = { rythme: "normal", cadrage: "flou", fps: "30", filtre: "tous", versions: "1", format: "vertical",
+                mode: "kills", langue_sous_titres: "fr", caster: "",
+                style: "auto", periode: "", joursKills: "1" };
+let etat = null, dernierResultat = null, reglagesCharges = false, minuterie = null, onglet = "Montage";
+let jeuxChoisis = new Set(), armesChoisies = new Set(), agentsChoisis = new Set();
+let selection = new Map(), dropId = null, killsCharges = [], filtreKill = "tous";
+const INFO_STYLES = {
+  auto: "Le mélange habituel d'AutoClip.",
+  phonk: "Agressif : glitchs, secousses, couleurs saturées. Va bien avec le rythme Nerveux.",
+  cinematique: "Posé : zooms, light leaks, couleurs ciné, bandes noires en YouTube. Va bien avec Calme.",
+  clean: "Propre : coupes nettes et zooms simples, sans glitch.",
+};
+const esc = (s) => String(s ?? "").replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+
+function toast(msg) {
+  const t = $("toast"); t.textContent = msg; t.classList.add("visible");
+  clearTimeout(t._m); t._m = setTimeout(() => t.classList.remove("visible"), 2800);
+}
+
+async function api(chemin, corps) {
+  const opts = corps === undefined ? {} :
+    { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(corps) };
+  const r = await fetch(chemin, opts);
+  const d = await r.json().catch(() => ({}));
+  if (!r.ok) throw new Error(d.erreur || ("Erreur " + r.status));
+  return d;
+}
+
+// Petite fenêtre : confirmation ou texte à copier. Renvoie une promesse (true = OK).
+function fenetre({ titre, texte = "", zone = null, oui = "OK", non = "Annuler", danger = false }) {
+  return new Promise((ok) => {
+    $("fenTitre").textContent = titre; $("fenTexte").textContent = texte;
+    $("fenTexte").classList.toggle("cache", !texte);
+    $("fenZone").classList.toggle("cache", zone === null); $("fenZone").value = zone || "";
+    $("fenOui").textContent = oui; $("fenNon").textContent = non;
+    $("fenNon").classList.toggle("cache", !non);
+    $("fenOui").className = "btn " + (danger ? "danger" : "principal");
+    $("voile").classList.remove("cache");
+    const fin = (v) => { $("voile").classList.add("cache"); ok(v); };
+    $("fenOui").onclick = () => fin(true); $("fenNon").onclick = () => fin(false);
+  });
+}
+
+function copier(texte) {
+  // http (pas https) : l'API presse-papiers n'est pas dispo, on passe par une zone de texte.
+  const z = document.createElement("textarea"); z.value = texte; z.setAttribute("readonly", "");
+  z.style.position = "fixed"; z.style.opacity = "0"; document.body.appendChild(z);
+  z.select(); z.setSelectionRange(0, texte.length);
+  let ok = false; try { ok = document.execCommand("copy"); } catch (_) {}
+  z.remove(); return ok;
+}
+
+async function montrerLegende(nom) {
+  try {
+    const d = await api("/api/legende?nom=" + encodeURIComponent(nom));
+    if (!d.texte) { toast("Pas de légende pour cette vidéo"); return; }
+    if (await fenetre({ titre: "Légende + hashtags", zone: d.texte, oui: "Copier", non: "Fermer" })) {
+      toast(copier(d.texte) ? "Copié, colle-le dans TikTok" : "Sélectionne le texte et copie-le");
+    }
+  } catch (e) { toast(e.message); }
+}
+
+async function finaliser(nom) {
+  try { await api("/api/finaliser", { nom }); toast("Version finale en cours…"); allerOnglet("Montage"); window.scrollTo({ top: 0, behavior: "smooth" }); rafraichir(); }
+  catch (e) { toast(e.message); }
+}
+
+// ---- onglets
+document.querySelectorAll("nav.onglets button").forEach((b) => b.onclick = () => allerOnglet(b.dataset.onglet));
+function allerOnglet(nom) {
+  onglet = nom;
+  ["Montage", "Kills", "Stats", "Plus"].forEach((o) => $("onglet" + o).classList.toggle("cache", o !== nom));
+  document.querySelectorAll("nav.onglets button").forEach((b) => b.classList.toggle("actif", b.dataset.onglet === nom));
+  $("barreChoix").classList.toggle("cache", nom !== "Kills" || selection.size === 0);
+  window.scrollTo(0, 0);
+  if (nom === "Kills") chargerKills();
+  if (nom === "Stats") { chargerStats(); chargerDefi(); chargerMatchs(); chargerCoach(); }
+  try { localStorage.setItem("onglet", nom); } catch (_) {}
+}
+
+// ---- segments et curseurs
+document.querySelectorAll(".segments").forEach((g) => {
+  g.addEventListener("click", (e) => {
+    const b = e.target.closest("button"); if (!b) return;
+    choisirSegment(g.dataset.champ, b.dataset.v, true);
+  });
+});
+function choisirSegment(champ, v, parUtilisateur) {
+  choix[champ] = String(v);
+  document.querySelectorAll(`.segments[data-champ="${champ}"] button`)
+    .forEach((b) => b.classList.toggle("actif", b.dataset.v === String(v)));
+  if (champ === "format") majFormat(parUtilisateur);
+  if (champ === "mode") {
+    const infos = {
+      fun: "AutoClip cherche les moments où tu cries ou ris au micro, et les monte en plans plus longs avec un « boom » sur chaque réaction.",
+      morts: "Coach : tes dernières morts, à vitesse normale, avec l'arme qui t'a tué. Pour comprendre tes erreurs.",
+      equipe: "Tes meilleurs kills + ceux de tes amis du défi, avec leur pseudo sur leurs kills.",
+    };
+    $("infoFun").textContent = infos[v] || ""; $("infoFun").classList.toggle("cache", !infos[v]);
+    const special = v === "fun" || v === "morts";
+    $("detailsArmes").closest(".champ").classList.toggle("cache", special);
+    document.querySelector('.segments[data-champ="filtre"]').closest(".champ").classList.toggle("cache", special);
+  }
+  if (champ === "style") {
+    $("infoStyle").textContent = INFO_STYLES[v] || "";
+    if (parUtilisateur) {
+      const r = { phonk: "nerveux", cinematique: "calme", clean: "normal" }[v];
+      if (r) choisirSegment("rythme", r);
+    }
+  }
+  if (champ === "joursKills" && parUtilisateur) chargerKills();
+}
+function majFormat(parUtilisateur) {
+  const yt = choix.format === "youtube";
+  $("duree").min = yt ? 60 : 8; $("duree").max = yt ? 180 : 60; $("duree").step = yt ? 10 : 1;
+  if (parUtilisateur) $("duree").value = yt ? 150 : 20;
+  $("champVersions").classList.toggle("cache", yt);
+  majValeurs();
+}
+const majValeurs = () => {
+  const d = +$("duree").value;
+  $("valDuree").textContent = d >= 60 ? `${Math.floor(d / 60)} min ${d % 60 ? (d % 60) + " s" : ""}` : d + " s";
+  $("valSon").textContent = $("son_jeu").value + " %";
+  $("valDerniers").textContent = $("derniers").value;
+};
+["duree", "son_jeu", "derniers"].forEach((id) => $(id).addEventListener("input", majValeurs));
+
+const BOOLS = ["ralenti", "textes", "sequences", "hook", "voix", "sous_titres", "compteur", "effets_sonores", "outro", "filigrane",
+               "arret_image", "instrumental"];
+function appliquerReglages(r) {
+  if (!r) return;
+  if (r.format) choisirSegment("format", r.format);
+  if (r.duree) $("duree").value = r.duree;
+  if (r.son_jeu !== undefined && r.son_jeu !== null) $("son_jeu").value = r.son_jeu;
+  if (r.derniers) $("derniers").value = r.derniers;
+  if (r.texte) $("texte").value = r.texte;
+  BOOLS.forEach((k) => { if (r[k] !== undefined && r[k] !== null) $(k).checked = !!r[k]; });
+  ["rythme", "filtre", "versions", "cadrage", "fps", "style", "mode", "langue_sous_titres", "caster"].forEach((k) => { if (r[k]) choisirSegment(k, r[k]); });
+  if (r.profil) profilVoulu = r.profil;
+  if (Array.isArray(r.jeux)) jeuxChoisis = new Set(r.jeux);
+  if (Array.isArray(r.armes)) armesChoisies = new Set(r.armes);
+  if (Array.isArray(r.agents)) agentsChoisis = new Set(r.agents);
+  majValeurs();
+}
+
+// ---- état du serveur
+async function rafraichir() {
+  try {
+    etat = await api("/api/etat");
+    $("connexion").textContent = "v" + etat.version; $("connexion").className = "pastille ok";
+  } catch (e) {
+    $("connexion").textContent = "Hors ligne"; $("connexion").className = "pastille ko";
+    planifier(4000); return;
+  }
+  if (!reglagesCharges) {
+    appliquerReglages(etat.reglages);
+    if (document.activeElement !== $("dossierClips")) $("dossierClips").value = etat.clips || "";
+    $("pseudo").value = etat.pseudo || "";
+    reglagesCharges = true;
+    chargerFiltres();
+  }
+  $("infoOutro").textContent = etat.pseudo ? `« ${etat.pseudo} » + ABONNE-TOI` : "Écris ton pseudo dans l'onglet Plus";
+  $("infoSortie").textContent = "Tes montages sont enregistrés dans : " + etat.dossier_sortie;
+  $("autoSession").checked = !!etat.auto_session;
+  const ix = etat.index || {};
+  $("etatIndex").textContent = ix.en_cours ? `Analyse de tes clips en cours (${ix.clips} faits)… ${ix.message || ""}`
+    : `${ix.clips || 0} clips analysés (armes, agents, one taps).`;
+  majMusiques(); majJeux(); majTache(); majVideos(); majApp();
+  planifier(etat.tache.en_cours ? 1000 : 5000);
+}
+function planifier(ms) { clearTimeout(minuterie); minuterie = setTimeout(rafraichir, ms); }
+
+function majMusiques() {
+  const sel = $("musique"), avant = sel.value || (etat.reglages && etat.reglages.musique) || "";
+  const noms = etat.musiques;
+  const actuels = [...sel.options].map((o) => o.value).filter((v) => v && v !== "__auto__");
+  if (JSON.stringify(actuels) !== JSON.stringify(noms) || !sel.options.length) {
+    sel.innerHTML = noms.length
+      ? '<option value="__auto__">Auto : la meilleure de ma liste</option>'
+      : '<option value="">Aucune musique, ajoute-en une</option>';
+    noms.forEach((n) => { const o = document.createElement("option"); o.value = n; o.textContent = n; sel.appendChild(o); });
+  }
+  if (avant === "__auto__" || noms.includes(avant)) sel.value = avant;
+}
+
+function puces(conteneur, liste, ensemble, apres) {
+  conteneur.innerHTML = "";
+  liste.forEach(([nom, n]) => {
+    const b = document.createElement("button");
+    b.className = ensemble.has(nom) ? "actif" : "";
+    b.innerHTML = `<span>${esc(nom)}</span>${n !== undefined ? `<small>${n}</small>` : ""}`;
+    b.onclick = () => { ensemble.has(nom) ? ensemble.delete(nom) : ensemble.add(nom); b.classList.toggle("actif"); apres && apres(); };
+    conteneur.appendChild(b);
+  });
+}
+
+function majJeux() {
+  const liste = $("listeJeux"), cle = JSON.stringify(etat.jeux) + [...jeuxChoisis].join("|");
+  if (liste.dataset.cle === cle) return;
+  liste.dataset.cle = cle;
+  if (!etat.jeux.length) { liste.innerHTML = '<span class="vide">Aucun clip trouvé</span>'; return; }
+  puces(liste, etat.jeux.map((j) => [j.nom, j.clips]), jeuxChoisis, () => { liste.dataset.cle = ""; majJeux(); });
+  $("infoJeux").textContent = jeuxChoisis.size ? [...jeuxChoisis].join(", ") : "tous";
+}
+
+async function chargerFiltres() {
+  try {
+    const d = await api("/api/filtres");
+    const maj = () => {
+      const t = [...armesChoisies, ...agentsChoisis];
+      $("infoArmes").textContent = t.length ? "· " + t.join(", ") : "";
+    };
+    if (d.armes.length) puces($("listeArmes"), d.armes, armesChoisies, maj);
+    else $("listeArmes").innerHTML = `<span class="vide">Analyse de tes clips en cours (${d.clips_analyses} faits)…</span>`;
+    if (d.agents.length) puces($("listeAgents"), d.agents, agentsChoisis, maj);
+    else $("listeAgents").innerHTML = '<span class="vide">…</span>';
+    maj();
+  } catch (_) {}
+}
+$("detailsArmes").addEventListener("toggle", () => { if ($("detailsArmes").open) chargerFiltres(); });
+
+function majTache() {
+  const t = etat.tache, carte = $("carteTache");
+  const active = t.en_cours || t.erreur || t.resultat;
+  if (!active && carte.dataset.lecture !== "1") carte.classList.add("cache");
+  if (active) carte.classList.remove("cache");
+  $("btnGenerer").disabled = t.en_cours; $("btnGenererChoix").disabled = t.en_cours;
+  $("btnGenerer").textContent = t.en_cours ? "Montage en cours…" : "Générer le montage";
+  if (!active) return;
+  carte.dataset.lecture = "";
+  $("titreTache").textContent = t.en_cours ? "Montage en cours" : t.erreur ? "Échec du montage" : "Montage prêt";
+  $("zoneProgression").classList.toggle("cache", !t.en_cours);
+  $("etape").textContent = t.etape || "…";
+  $("chrono").textContent = t.secondes + " s";
+  $("barre").style.width = Math.round(t.progression * 100) + "%";
+  $("zoneErreur").classList.toggle("cache", !t.erreur);
+  $("zoneErreur").textContent = t.erreur || "";
+  const pre = $("journal"), bas = pre.scrollTop + pre.clientHeight >= pre.scrollHeight - 8;
+  pre.textContent = t.journal.join("\n"); if (bas) pre.scrollTop = pre.scrollHeight;
+  $("zoneResultat").classList.toggle("cache", !t.resultat);
+  if (t.resultat && t.resultat !== dernierResultat) {
+    montrerVideo(t.resultat);
+    if (navigator.vibrate) navigator.vibrate([80, 60, 80]);
+    toast("Montage prêt !");
+  }
+}
+
+function montrerVideo(nom) {
+  dernierResultat = nom;
+  const url = "/videos/" + encodeURIComponent(nom);
+  $("lecteur").src = url;
+  $("lecteur").style.aspectRatio = nom.startsWith("youtube") ? "16/9" : "9/16";
+  $("btnVoirDossier").onclick = () => ouvrir(nom);
+  const info = (etat && etat.infos_videos && etat.infos_videos[nom]) || {};
+  $("btnFinaliserResultat").classList.toggle("cache", !info.finalisable);
+  $("btnLegendeResultat").onclick = () => montrerLegende(nom);
+  $("btnFinaliserResultat").onclick = () => finaliser(nom);
+}
+
+function taille(o) { return o > 1e9 ? (o / 1e9).toFixed(1) + " Go" : o > 1e6 ? (o / 1e6).toFixed(1) + " Mo" : Math.round(o / 1e3) + " ko"; }
+function date(s) {
+  return new Date(s * 1000).toLocaleString("fr-CA", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" });
+}
+function majVideos() {
+  const liste = $("listeVideos"), cle = JSON.stringify(etat.videos) + JSON.stringify(etat.infos_videos);
+  if (liste.dataset.cle === cle) return;
+  liste.dataset.cle = cle;
+  if (!etat.videos.length) { liste.innerHTML = '<p class="vide">Aucun montage pour l\'instant. Règle tes options plus haut et touche « Générer ».</p>'; return; }
+  liste.innerHTML = "";
+  etat.videos.forEach((v) => {
+    const url = "/videos/" + encodeURIComponent(v.nom);
+    const info = (etat.infos_videos || {})[v.nom] || {};
+    const yt = v.nom.startsWith("youtube");
+    const el = document.createElement("div"); el.className = "video-item";
+    el.innerHTML = `${v.miniature ? `<img class="mini${yt ? " large" : ""}" alt="" loading="lazy" src="/videos/${encodeURIComponent(v.miniature)}">` : ""}<div class="nom"></div>
+      <div class="actions">
+      <button class="icone" title="Regarder" aria-label="Regarder">▶</button>
+      ${info.legende ? '<button class="icone texte" data-a="legende">Légende</button>' : ""}
+      ${info.finalisable ? '<button class="icone texte" data-a="final">Final</button>' : ""}
+      ${(info.titres && info.titres.length > 1) || (info.miniatures && info.miniatures.length > 1) ? '<button class="icone texte" data-a="choix">Titre</button>' : ""}
+      <button class="icone texte" data-a="dossier" title="Voir dans l'Explorateur">Dossier</button>
+      <button class="icone danger" title="Supprimer" aria-label="Supprimer">✕</button></div>`;
+    el.querySelector(".nom").innerHTML = `${date(v.date)}${info.meilleure ? ' <span class="tag cyan">★ Meilleure</span>' : ""}<small></small>`;
+    const ver = v.nom.match(/_v(\d)\.mp4$/);
+    el.querySelector(".nom small").textContent = taille(v.taille) + (v.nom.includes("_apercu") ? " · aperçu" : "")
+      + (ver ? ` · version ${ver[1]}` : "") + (v.nom.startsWith("best-of") ? " · best-of" : "")
+      + (v.nom.startsWith("session") ? " · session" : "") + (yt ? " · YouTube" : "") + (info.note ? ` · ${String(info.note).replace(".", ",")}/10` : "");
+    el.querySelector('[data-a="dossier"]').onclick = () => ouvrir(v.nom);
+    const bc = el.querySelector('[data-a="choix"]'); if (bc) bc.onclick = () => choisirTitre(v.nom, info);
+    el.querySelector('[title="Regarder"]').onclick = () => {
+      montrerVideo(v.nom);
+      const c = $("carteTache"); c.classList.remove("cache"); c.dataset.lecture = "1"; $("titreTache").textContent = "Montage";
+      $("zoneProgression").classList.add("cache"); $("zoneErreur").classList.add("cache");
+      $("zoneResultat").classList.remove("cache");
+      window.scrollTo({ top: 0, behavior: "smooth" });
+    };
+    const bl = el.querySelector('[data-a="legende"]'); if (bl) bl.onclick = () => montrerLegende(v.nom);
+    const bf = el.querySelector('[data-a="final"]'); if (bf) bf.onclick = () => finaliser(v.nom);
+    const sup = el.querySelector(".danger");
+    sup.onclick = async () => {
+      if (!sup.classList.contains("confirmer")) {
+        sup.classList.add("confirmer"); sup.textContent = "✓";
+        setTimeout(() => { sup.classList.remove("confirmer"); sup.textContent = "✕"; }, 3000);
+        return;
+      }
+      try { await api("/api/supprimer", { nom: v.nom }); toast("Supprimé"); rafraichir(); }
+      catch (e) { toast(e.message); }
+    };
+    liste.appendChild(el);
+  });
+}
+
+// ---- génération
+function corpsMontage() {
+  return {
+    musique: $("musique").value, duree: +$("duree").value, rythme: choix.rythme, cadrage: choix.cadrage, filtre: choix.filtre,
+    jeux: [...jeuxChoisis], textes: $("textes").checked, sequences: $("sequences").checked,
+    versions: choix.versions, hook: $("hook").checked, voix: $("voix").checked, sous_titres: $("sous_titres").checked,
+    son_jeu: +$("son_jeu").value, ralenti: $("ralenti").checked, apercu: $("apercu").checked,
+    texte: $("texte").value.trim(), debut_musique: $("debut_musique").value, derniers: +$("derniers").value, fps: choix.fps,
+    format: choix.format, style: choix.style, periode: choix.periode, compteur: $("compteur").checked,
+    effets_sonores: $("effets_sonores").checked, outro: $("outro").checked,
+    mode: choix.mode, langue_sous_titres: choix.langue_sous_titres, filigrane: $("filigrane").checked,
+    caster: choix.caster, arret_image: $("arret_image").checked, instrumental: $("instrumental").checked,
+    profil: $("profil").value,
+    armes: [...armesChoisies], agents: [...agentsChoisis],
+  };
+}
+async function lancer(corps, bouton) {
+  if (!corps.musique) { toast("Choisis une musique dans l'onglet Montage"); allerOnglet("Montage"); return; }
+  bouton.disabled = true;
+  try {
+    await api("/api/generer", corps);
+    dernierResultat = null; $("lecteur").removeAttribute("src");
+    allerOnglet("Montage"); window.scrollTo({ top: 0, behavior: "smooth" });
+    rafraichir();
+  } catch (e) { toast(e.message); bouton.disabled = false; }
+}
+$("btnGenerer").onclick = () => lancer(corpsMontage(), $("btnGenerer"));
+
+$("btnAjouter").onclick = () => $("fichierMusique").click();
+$("fichierMusique").onchange = () => {
+  const f = $("fichierMusique").files[0]; if (!f) return;
+  const xhr = new XMLHttpRequest();
+  $("envoi").classList.remove("cache"); $("barreEnvoi").style.width = "0";
+  xhr.upload.onprogress = (e) => { if (e.lengthComputable) $("barreEnvoi").style.width = (e.loaded / e.total * 100) + "%"; };
+  xhr.onload = () => {
+    $("envoi").classList.add("cache"); $("fichierMusique").value = "";
+    let d = {}; try { d = JSON.parse(xhr.responseText); } catch (_) {}
+    if (xhr.status === 200) {
+      toast("Musique ajoutée");
+      etat.reglages = Object.assign({}, etat.reglages, { musique: d.nom }); $("musique").value = "";
+      rafraichir().then(() => { $("musique").value = d.nom; });
+    } else toast(d.erreur || "Échec de l'envoi");
+  };
+  xhr.onerror = () => { $("envoi").classList.add("cache"); toast("Échec de l'envoi"); };
+  xhr.open("POST", "/api/musique");
+  xhr.setRequestHeader("X-Nom-Fichier", encodeURIComponent(f.name));
+  xhr.send(f);
+};
+
+// ---- Mes kills
+const FILTRES_KILLS = [["tous", "Tous"], ["onetap", "One taps"], ["multi", "3K et +"]];
+function majFiltreKills() {
+  const c = $("filtreKills"); c.innerHTML = "";
+  const armes = [...new Set(killsCharges.map((k) => k.arme).filter(Boolean))].slice(0, 6);
+  [...FILTRES_KILLS, ...armes.map((a) => ["arme:" + a, a])].forEach(([v, n]) => {
+    const b = document.createElement("button"); b.textContent = n; b.className = filtreKill === v ? "actif" : "";
+    b.onclick = () => { filtreKill = v; majFiltreKills(); dessinerKills(); };
+    c.appendChild(b);
+  });
+}
+async function chargerKills() {
+  try {
+    const d = await api("/api/kills?jours=" + choix.joursKills);
+    killsCharges = d.kills;
+    $("infoKills").textContent = d.total
+      ? `${d.total} kills${d.total > d.kills.length ? ` (les ${d.kills.length} plus récents)` : ""}.`
+      : `Aucun kill sur cette période. ${d.clips_analyses} clips analysés pour l'instant.`;
+    majFiltreKills(); dessinerKills();
+  } catch (e) { toast(e.message); }
+}
+function texteKill(k) {
+  const n = k.nom.toLowerCase();
+  if (n.includes("ace")) return "ACE"; if (/^\dk$/.test(n)) return n.toUpperCase(); if (n.includes("knife")) return "Couteau";
+  return "Kill";
+}
+function dessinerKills() {
+  const g = $("grilleKills"); g.innerHTML = "";
+  const liste = killsCharges.filter((k) => filtreKill === "tous" ? true : filtreKill === "onetap" ? k.one_tap
+    : filtreKill === "multi" ? /^[345]k$|ace/i.test(k.nom) : filtreKill.startsWith("arme:") ? k.arme === filtreKill.slice(5) : true);
+  if (!liste.length) { g.innerHTML = '<p class="vide" style="grid-column:span 2">Rien ici. Change la période ou le filtre.</p>'; return; }
+  liste.forEach((k) => {
+    const el = document.createElement("div");
+    el.className = "kill" + (selection.has(k.id) ? " choisi" : "") + (dropId === k.id ? " drop" : "");
+    el.setAttribute("role", "button"); el.tabIndex = 0;
+    el.innerHTML = `${k.vignette ? `<img loading="lazy" alt="" src="/vignettes/${encodeURIComponent(k.vignette)}">` : '<img alt="">'}
+      <span class="coche">${selection.has(k.id) ? "✓" : ""}</span>
+      <button class="etoile" aria-label="Mettre sur le drop">★</button>
+      <div class="legende"><b>${texteKill(k)}</b> ${k.one_tap ? '<span class="tag">ONE TAP</span>' : ""}
+      <span class="sous">${esc([k.arme, k.agent].filter(Boolean).join(" · ") || k.jeu)} — ${date(k.date)}</span></div>`;
+    el.onclick = (e) => {
+      if (e.target.closest(".etoile")) {
+        dropId = dropId === k.id ? null : k.id;
+        if (dropId) selection.set(k.id, k);
+      } else if (selection.has(k.id)) { selection.delete(k.id); if (dropId === k.id) dropId = null; }
+      else selection.set(k.id, k);
+      dessinerKills(); majBarreChoix();
+    };
+    g.appendChild(el);
+  });
+}
+function majBarreChoix() {
+  const n = selection.size;
+  $("barreChoix").classList.toggle("cache", onglet !== "Kills" || n === 0);
+  $("nbChoisis").textContent = n + (n > 1 ? " kills choisis" : " kill choisi");
+  const d = dropId && selection.get(dropId);
+  $("infoDrop").textContent = d ? `★ Drop : ${texteKill(d)}${d.arme ? " à la " + d.arme : ""}` : (n < 3 ? "Choisis-en au moins 3" : "Touche ★ pour choisir le drop");
+  $("btnGenererChoix").disabled = n < 3 || (etat && etat.tache.en_cours);
+}
+$("btnViderChoix").onclick = () => { selection.clear(); dropId = null; dessinerKills(); majBarreChoix(); };
+$("btnGenererChoix").onclick = () => {
+  const corps = corpsMontage();
+  corps.selection = [...selection.values()].map((k) => ({ clip: k.clip, t: k.t }));
+  if (dropId && selection.get(dropId)) corps.drop = { clip: selection.get(dropId).clip, t: selection.get(dropId).t };
+  corps.versions = "1"; corps.periode = ""; corps.filtre = "tous"; corps.armes = []; corps.agents = [];
+  lancer(corps, $("btnGenererChoix"));
+};
+
+// ---- Stats
+function histo(el, valeurs, cleAujourdhui) {
+  const max = Math.max(1, ...valeurs);
+  el.innerHTML = valeurs.map((v, i) => `<div class="${v ? "" : "zero"} ${i === valeurs.length - 1 && cleAujourdhui ? "aujourdhui" : ""}"
+    style="height:${Math.max(2, v / max * 100)}%" title="${v}"></div>`).join("");
+}
+function rangs(el, liste, vide) {
+  if (!liste.length) { el.innerHTML = `<p class="vide">${vide}</p>`; return; }
+  const max = Math.max(...liste.map((x) => x[1]));
+  el.innerHTML = liste.map(([n, v]) => `<div class="rang"><span class="nom">${esc(n)}</span>
+    <span class="jauge"><div style="width:${v / max * 100}%"></div></span><span class="n">${v}</span></div>`).join("");
+}
+async function chargerStats() {
+  try {
+    const s = await api("/api/stats?jours=30");
+    const t = s.total;
+    const parMatch = t.matchs ? (t.kills / t.matchs).toFixed(1).replace(".", ",") : "–";
+    $("tuiles").innerHTML = `
+      <div class="tuile forte"><b>${t.kills}</b><span>kills dans tes clips</span></div>
+      <div class="tuile"><b>${t.aces}</b><span>aces</span></div>
+      <div class="tuile"><b>${t["4k"]}</b><span>4K</span></div>
+      <div class="tuile"><b>${t["3k"]}</b><span>3K</span></div>
+      <div class="tuile"><b>${t.one_taps}</b><span>one taps</span></div>
+      <div class="tuile"><b>${t.matchs}</b><span>parties</span></div>
+      <div class="tuile"><b>${parMatch}</b><span>kills clippés par partie</span></div>`;
+    histo($("histoJours"), s.par_jour.map((d) => d.kills), true);
+    $("axeDebut").textContent = new Date(s.par_jour[0].jour + "T12:00").toLocaleDateString("fr-CA", { day: "numeric", month: "short" });
+    histo($("histoSemaines"), s.par_semaine.map((d) => d.kills), true);
+    $("axeSemaineDebut").textContent = s.par_semaine.length ? s.par_semaine[0].semaine.replace("-S", " sem. ") : "";
+    $("meilleurJour").textContent = s.meilleur_jour && s.meilleur_jour.kills
+      ? `Ton record : ${s.meilleur_jour.kills} kills le ${new Date(s.meilleur_jour.jour + "T12:00").toLocaleDateString("fr-CA", { day: "numeric", month: "long" })}.` : "";
+    rangs($("rangArmes"), s.armes, "Les armes apparaissent quand tes clips Valorant sont analysés.");
+    rangs($("rangAgents"), s.agents, "Les agents apparaissent quand tes clips Valorant sont analysés.");
+    $("infoStats").textContent = `Calculé à partir des kills enregistrés par Medal (${s.clips_analyses} clips analysés). Les kills hors clip ne sont pas comptés.`;
+  } catch (e) { toast(e.message); }
+}
+
+// ---- App de bureau : dossier, Explorateur, Patreon, styles, mise à jour
+function peutPartager() { return false; }
+async function ouvrir(nom) { try { await api("/api/ouvrir", nom ? { nom } : {}); } catch (e) { toast(e.message); } }
+async function lien(quoi) { try { await api("/api/lien", { quoi }); } catch (e) { toast(e.message); } }
+async function choisirDossier() {
+  try {
+    const d = await api("/api/dossier", {});
+    if (d.ok) { $("dossierClips").value = d.clips; toast("Dossier choisi"); reglagesCharges = true; rafraichir(); }
+  } catch (e) { toast(e.message); }
+}
+function majApp() {
+  const l = etat.liens || {}, cap = etat.capacites || {};
+  document.querySelectorAll("[data-capacite]").forEach((el) => el.classList.toggle("cache", !cap[el.dataset.capacite]));
+  $("btnPatreonHaut").classList.toggle("cache", !l.patreon);
+  $("btnPatreon").classList.toggle("cache", !l.patreon);
+  $("btnSite").classList.toggle("cache", !l.site);
+  $("btnDiscord").classList.toggle("cache", !l.discord);
+  $("btnMaj").classList.toggle("cache", !etat.mise_a_jour);
+  $("btnMaj").textContent = etat.mise_a_jour ? `Mettre à jour (v${etat.mise_a_jour.version})` : "";
+  $("infoVersion").textContent = `AutoClip version ${etat.version}` + (etat.mise_a_jour ? ` · nouvelle version ${etat.mise_a_jour.version} disponible` : "");
+  // Premier lancement : guide en 3 étapes tant qu'il manque le dossier ou une musique.
+  const ok1 = !!etat.clips_ok, ok2 = etat.musiques.length > 0, ok3 = etat.videos.length > 0;
+  $("carteBienvenue").classList.toggle("cache", ok1 && ok2 && ok3);
+  $("etape1").classList.toggle("fait", ok1); $("etape2").classList.toggle("fait", ok2); $("etape3").classList.toggle("fait", ok3);
+  $("etape1Info").textContent = ok1 ? "Trouvé : " + etat.clips : "On n'a pas trouvé le dossier où Medal enregistre tes clips.";
+}
+$("btnPatreon").onclick = $("btnPatreonHaut").onclick = () => lien("patreon");
+$("btnSite").onclick = () => lien("site");
+$("btnDiscord").onclick = () => lien("discord");
+$("btnMaj").onclick = () => lien("mise_a_jour");
+$("btnChoisir1").onclick = $("btnChoisir2").onclick = choisirDossier;
+$("btnOuvrirSortie").onclick = () => ouvrir();
+$("btnDetecter").onclick = async () => {
+  try { const d = await api("/api/detecter", {}); toast("Trouvé : " + d.clips); reglagesCharges = false; rafraichir(); }
+  catch (e) { toast(e.message); }
+};
+$("btnBestOf").onclick = async () => {
+  try { await api("/api/bestof", {}); toast("Best-of en cours…"); allerOnglet("Montage"); window.scrollTo({ top: 0 }); rafraichir(); }
+  catch (e) { toast(e.message); }
+};
+$("btnImporterPack").onclick = () => $("fichierPack").click();
+$("fichierPack").onchange = async () => {
+  const f = $("fichierPack").files[0]; if (!f) return;
+  $("fichierPack").value = "";
+  try {
+    const r = await fetch("/api/style/importer", { method: "POST", headers: { "Content-Type": "application/json" }, body: await f.text() });
+    const d = await r.json().catch(() => ({}));
+    if (!r.ok) throw new Error(d.erreur || "Import impossible");
+    $("infoPack").textContent = `Ajouté : ${d.styles.join(", ")}. Choisis-le dans « Copier le style d'une vidéo » (onglet Montage).`;
+    toast(d.styles.length > 1 ? `${d.styles.length} styles importés` : "Style importé"); chargerProfils();
+  } catch (e) { toast(e.message); }
+};
+
+// ---- Défi entre amis
+async function chargerDefi() {
+  const z = $("zoneDefi");
+  try {
+    const d = await api("/api/defi");
+    if (!d.code) {
+      z.innerHTML = `<p class="astuce" style="margin-top:0">Compare tes kills de la semaine avec tes potes qui ont AutoClip. Points : 1 par kill, 3 par one tap, 5 par 4K, 10 par ace. Seules tes stats sont partagées.</p>
+        <button class="btn second" id="btnCreerDefi">Créer un défi</button>
+        <div class="ligne" style="margin-top:10px"><input type="text" id="codeDefi" placeholder="Code d'un ami (defi-…)" autocapitalize="off" autocomplete="off" spellcheck="false"><button class="btn second petit" id="btnRejoindre" style="flex:none">Rejoindre</button></div>`;
+      $("btnCreerDefi").onclick = () => actionDefi({ action: "creer" });
+      $("btnRejoindre").onclick = () => actionDefi({ action: "rejoindre", code: $("codeDefi").value });
+      return;
+    }
+    const lignes = d.classement.map((s, i) => `<div class="rang"><span class="nom"${s.pseudo === d.moi ? ' style="color:var(--cyan);font-weight:700"' : ""}>${i + 1}. ${esc(s.pseudo)}</span>
+      <span style="flex:1;color:var(--doux);font-size:13px">${s.kills} kills · ${s.one_taps} OT · ${s["4k"]} 4K · ${s.aces} ace</span><span class="n" style="width:56px">${s.points} pts</span></div>`).join("");
+    z.innerHTML = `${lignes || '<p class="vide">Personne encore cette semaine.</p>'}
+      <p class="astuce">Code à donner à tes amis : <b style="user-select:all;-webkit-user-select:all">${esc(d.code)}</b></p>
+      <div class="ligne"><button class="btn second petit" id="btnCopierDefi">Copier le code</button><button class="btn second petit" id="btnQuitterDefi">Quitter le défi</button></div>
+      <div class="champ bascule" style="margin-top:12px"><span>Partager mes meilleurs kills<small>Tes 3K+, aces et one taps (6 s, son du jeu seulement, jamais ton micro) pour le montage d'équipe. ${d.clips_amis} clip(s) d'amis reçus.</small></span><input type="checkbox" id="partagerClips"></div>`;
+    $("btnCopierDefi").onclick = () => toast(copier(d.code) ? "Code copié" : d.code);
+    $("partagerClips").checked = !!d.partager_clips;
+    $("partagerClips").onchange = () => actionDefi({ action: "partager_clips", actif: $("partagerClips").checked });
+    $("btnQuitterDefi").onclick = async () => { if (await fenetre({ titre: "Quitter le défi ?", texte: "Tu pourras le rejoindre avec le même code.", oui: "Quitter" })) actionDefi({ action: "quitter" }); };
+  } catch (e) { z.innerHTML = `<p class="vide">${esc(e.message)}</p>`; }
+}
+async function actionDefi(corps) {
+  try { await api("/api/defi", corps); chargerDefi(); } catch (e) { toast(e.message); }
+}
+
+// ---- Titres et miniatures au choix
+function choisirTitre(nom, info) {
+  $("fenTitre").textContent = "Titre et miniature"; $("fenTexte").classList.add("cache"); $("fenZone").classList.add("cache");
+  const z = document.createElement("div");
+  let mini = 1, titre = (info.titres || [])[0] || "";
+  const yt = nom.startsWith("youtube");
+  z.innerHTML = `<div style="display:flex;gap:8px;margin-bottom:12px">${(info.miniatures || []).map((m, i) =>
+      `<img data-i="${i + 1}" src="/videos/${encodeURIComponent(m)}" alt="Miniature ${i + 1}" style="flex:1;min-width:0;border-radius:10px;border:3px solid ${i ? "transparent" : "var(--cyan)"};aspect-ratio:${yt ? "16/9" : "9/16"};object-fit:cover">`).join("")}</div>
+    <div class="puces" style="flex-direction:column;align-items:stretch">${(info.titres || []).map((t, i) =>
+      `<button data-t="${i}" class="${i ? "" : "actif"}" style="text-align:left">${esc(t)}</button>`).join("")}</div>`;
+  z.querySelectorAll("img").forEach((im) => im.onclick = () => { mini = +im.dataset.i; z.querySelectorAll("img").forEach((x) => x.style.borderColor = x === im ? "var(--cyan)" : "transparent"); });
+  z.querySelectorAll("button").forEach((b) => b.onclick = () => { titre = info.titres[+b.dataset.t]; z.querySelectorAll("button").forEach((x) => x.classList.toggle("actif", x === b)); });
+  $("fenTitre").after(z);
+  $("fenOui").textContent = "Garder ceux-là"; $("fenNon").textContent = "Annuler"; $("fenNon").classList.remove("cache");
+  $("fenOui").className = "btn principal"; $("voile").classList.remove("cache");
+  const fin = () => { z.remove(); $("voile").classList.add("cache"); };
+  $("fenNon").onclick = fin;
+  $("fenOui").onclick = async () => {
+    const corps = { nom };
+    if ((info.miniatures || []).length) corps.miniature = mini;
+    if (titre) corps.titre = titre;
+    try { await api("/api/choix", corps); toast("Titre et miniature changés"); $("listeVideos").dataset.cle = ""; rafraichir(); }
+    catch (e) { toast(e.message); }
+    fin();
+  };
+}
+
+// ---- Coach
+async function chargerCoach() {
+  const z = $("zoneCoach");
+  try {
+    const c = await api("/api/coach?jours=30");
+    if (!c.morts) { z.innerHTML = `<p class="vide">Aucune mort trouvée pour l'instant (${c.clips_analyses} clips analysés, l'analyse continue en arrière-plan).</p>`; return; }
+    z.innerHTML = `<p class="astuce" style="margin-top:0"><b style="color:var(--texte);font-size:20px">${c.morts}</b> morts trouvées dans tes clips.</p>
+      <label class="titre">Les armes qui te tuent</label><div id="rangMortsArmes"></div>
+      <label class="titre" style="margin-top:10px">Les agents qui te tuent</label><div id="rangMortsAgents"></div>
+      ${c.conseils.map((x) => `<p class="astuce">${esc(x)}</p>`).join("")}
+      <button class="btn second" id="btnMontageMorts" style="margin-top:10px">Faire le montage de mes morts</button>`;
+    rangs($("rangMortsArmes"), c.armes, "…"); rangs($("rangMortsAgents"), c.agents, "…");
+    $("btnMontageMorts").onclick = () => { const b = corpsMontage(); b.mode = "morts"; b.versions = "1"; b.periode = "semaine"; lancer(b, $("btnMontageMorts")); };
+  } catch (e) { z.innerHTML = `<p class="vide">${esc(e.message)}</p>`; }
+}
+
+// ---- Copier le style d'une vidéo
+let profilVoulu = "";
+async function chargerProfils() {
+  try {
+    const d = await api("/api/styles"), sel = $("profil"), avant = sel.value || profilVoulu;
+    sel.innerHTML = '<option value="">Aucun</option>' + d.profils.map((p) =>
+      `<option value="${esc(p.id)}">${p.pack ? "★ " : ""}${esc(p.nom)} (plans de ${String(p.duree_plan).replace(".", ",")} s)</option>`).join("");
+    if (d.profils.some((p) => p.id === avant)) sel.value = avant;
+  } catch (_) {}
+}
+$("btnCopierStyle").onclick = () => $("fichierStyle").click();
+$("fichierStyle").onchange = async () => {
+  const f = $("fichierStyle").files[0]; if (!f) return;
+  const nom = (prompt("Nom de ce style ?", "Mon style") || "Mon style").slice(0, 30);
+  const xhr = new XMLHttpRequest();
+  $("envoiStyle").classList.remove("cache"); $("barreStyle").style.width = "0";
+  xhr.upload.onprogress = (e) => { if (e.lengthComputable) $("barreStyle").style.width = (e.loaded / e.total * 100) + "%"; };
+  xhr.onload = () => {
+    $("envoiStyle").classList.add("cache"); $("fichierStyle").value = "";
+    let d = {}; try { d = JSON.parse(xhr.responseText); } catch (_) {}
+    if (xhr.status === 200) {
+      const p = d.profil;
+      $("infoProfil").textContent = `Style « ${p.nom} » : ${p.coupes} coupes, plans de ${String(p.duree_plan).replace(".", ",")} s (${String(p.beats_par_plan).replace(".", ",")} beats), ${Math.round(p.sur_beat * 100)} % pile sur le beat, ${Math.round(p.flash * 100)} % de flashs.`;
+      profilVoulu = p.nom.trim().toLowerCase().replace(/[^\w\-]/g, "_").slice(0, 30); chargerProfils();
+      toast("Style copié");
+    } else toast(d.erreur || "Échec de l'analyse");
+  };
+  xhr.onerror = () => { $("envoiStyle").classList.add("cache"); toast("Échec de l'envoi"); };
+  xhr.open("POST", "/api/style");
+  xhr.setRequestHeader("X-Nom-Style", encodeURIComponent(nom));
+  xhr.send(f);
+};
+
+// ---- Cartes de match
+async function chargerMatchs() {
+  const l = $("listeMatchs");
+  try {
+    const d = await api("/api/matchs");
+    if (!d.matchs.length) { l.innerHTML = '<p class="vide">Aucune partie analysée pour l\'instant.</p>'; return; }
+    l.innerHTML = "";
+    d.matchs.slice(0, 10).forEach((m) => {
+      const el = document.createElement("div"); el.className = "video-item";
+      const best = /ace/i.test(m.meilleur) ? "ACE" : m.meilleur;
+      el.innerHTML = `<div class="nom">${date(m.date)}<small>${m.kills} kills · meilleur round ${esc(best)}${m.agent ? " · " + esc(m.agent) : ""}</small></div>
+        <div class="actions"><button class="icone texte">Carte</button></div>`;
+      el.querySelector("button").onclick = () => montrerCarte(m.match);
+      l.appendChild(el);
+    });
+  } catch (e) { l.innerHTML = `<p class="vide">${esc(e.message)}</p>`; }
+}
+async function montrerCarte(match) {
+  const url = "/api/carte?match=" + encodeURIComponent(match);
+  $("fenTitre").textContent = "Carte de la partie"; $("fenTexte").classList.add("cache"); $("fenZone").classList.add("cache");
+  const img = document.createElement("img"); img.src = url; img.alt = "Carte de la partie";
+  img.style.cssText = "width:100%;border-radius:12px;display:block;background:#000;aspect-ratio:4/5";
+  $("fenTitre").after(img);
+  $("fenOui").textContent = "Enregistrer"; $("fenNon").textContent = "Fermer";
+  $("fenNon").classList.remove("cache"); $("fenOui").className = "btn principal"; $("voile").classList.remove("cache");
+  const fin = () => { img.remove(); $("voile").classList.add("cache"); };
+  $("fenNon").onclick = fin;
+  $("fenOui").onclick = async () => {
+    if (peutPartager()) {
+      try { const b = await (await fetch(url)).blob(); await navigator.share({ files: [new File([b], "carte.jpg", { type: "image/jpeg" })] }); }
+      catch (e) { if (e.name !== "AbortError") toast(e.message); }
+    } else { const a = document.createElement("a"); a.href = url + "&dl=1"; a.download = "carte.jpg"; a.click(); }
+  };
+}
+
+// ---- Plus : automatique, ménage, réglages
+$("autoSession").onchange = async () => {
+  try { await api("/api/config", { auto_session: $("autoSession").checked });
+        toast($("autoSession").checked ? "Montage auto activé pour tes prochaines sessions" : "Montage auto désactivé"); }
+  catch (e) { toast(e.message); }
+};
+$("btnSession").onclick = async () => {
+  try { await api("/api/session", {}); toast("Montage de ta session en cours…"); allerOnglet("Montage"); window.scrollTo({ top: 0 }); rafraichir(); }
+  catch (e) { toast(e.message); }
+};
+
+let menage = [];
+$("btnMenage").onclick = async () => {
+  $("btnMenage").disabled = true;
+  try {
+    const d = await api("/api/menage");
+    menage = d.clips;
+    $("zoneMenage").classList.remove("cache");
+    $("infoMenage").textContent = menage.length ? `${menage.length} clips · ${taille(d.taille)}` : "Aucun clip sans kill. C'est propre !";
+    $("btnToutCocher").classList.toggle("cache", !menage.length);
+    const l = $("listeMenage"); l.innerHTML = "";
+    menage.forEach((c) => {
+      const el = document.createElement("label"); el.className = "menage-item";
+      el.innerHTML = `<input type="checkbox" value="${esc(c.nom)}"><img loading="lazy" alt="" src="/api/menage/vignette?nom=${encodeURIComponent(c.nom)}">
+        <span class="nom">${esc(c.jeu)}<small>${date(c.date)} · ${taille(c.taille)}</small></span>`;
+      el.querySelector("input").onchange = majCorbeille;
+      l.appendChild(el);
+    });
+    majCorbeille();
+  } catch (e) { toast(e.message); }
+  $("btnMenage").disabled = false;
+};
+function cochesMenage() { return [...document.querySelectorAll("#listeMenage input:checked")].map((i) => i.value); }
+function majCorbeille() {
+  const noms = cochesMenage(), t = menage.filter((c) => noms.includes(c.nom)).reduce((a, c) => a + c.taille, 0);
+  $("btnCorbeille").disabled = !noms.length;
+  $("btnCorbeille").textContent = noms.length ? `Mettre ${noms.length} clip${noms.length > 1 ? "s" : ""} à la corbeille (${taille(t)})` : "Coche les clips à enlever";
+}
+$("btnToutCocher").onclick = () => {
+  const cases = [...document.querySelectorAll("#listeMenage input")], tout = cases.every((c) => c.checked);
+  cases.forEach((c) => c.checked = !tout); majCorbeille();
+};
+$("btnCorbeille").onclick = async () => {
+  const noms = cochesMenage(); if (!noms.length) return;
+  const ok = await fenetre({ titre: `Mettre ${noms.length} clip${noms.length > 1 ? "s" : ""} à la corbeille ?`,
+    texte: "Ils iront dans la Corbeille de ton PC. Tu pourras les récupérer tant que tu ne la vides pas.",
+    oui: "Mettre à la corbeille", danger: true });
+  if (!ok) return;
+  try {
+    const d = await api("/api/menage/corbeille", { noms, confirmation: "OUI" });
+    toast(`${d.ok} clip${d.ok > 1 ? "s" : ""} dans la corbeille` + (d.erreurs.length ? ` · ${d.erreurs.length} en erreur (Medal les utilise ?)` : ""));
+    $("btnMenage").click();
+  } catch (e) { toast(e.message); }
+};
+
+$("btnClips").onclick = async () => {
+  try { await api("/api/config", { clips: $("dossierClips").value, pseudo: $("pseudo").value }); toast("Enregistré"); reglagesCharges = true; rafraichir(); }
+  catch (e) { toast(e.message); }
+};
+
+document.addEventListener("visibilitychange", () => { if (!document.hidden) rafraichir(); });
+majValeurs();
+chargerProfils();
+try { const o = localStorage.getItem("onglet"); if (o) allerOnglet(o); } catch (_) {}
+rafraichir();
+</script>
+</body>
+</html>

@@ -1,0 +1,183 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>AutoClip</title>
+<meta name="description" content="AutoClip transforme tes clips Medal de Valorant en montages TikTok calés sur la musique. Gratuit, sur ton PC.">
+<link rel="icon" href="icone.png">
+<style>
+  :root {
+    --fond: #0e0f13; --carte: #171920; --carte2: #1f222b; --bord: #2a2e3a;
+    --texte: #e9eaf0; --doux: #9aa0b4; --rose: #ff3d6e; --cyan: #25f4ee; --patreon: #ff424d;
+  }
+  * { box-sizing: border-box; }
+  [hidden] { display: none !important; }
+  html, body { margin: 0; background: var(--fond); color: var(--texte); font: 17px/1.55 system-ui, -apple-system, "Segoe UI", sans-serif; }
+  a { color: inherit; }
+  .page { max-width: 1080px; margin: 0 auto; padding: 0 16px; }
+  nav { display: flex; align-items: center; justify-content: space-between; padding: 18px 0; gap: 12px; }
+  .logo { font-weight: 800; font-size: 22px; letter-spacing: -.02em; display: flex; align-items: center; gap: 10px; text-decoration: none; }
+  .logo img { width: 32px; height: 32px; border-radius: 8px; }
+  .logo span { background: linear-gradient(90deg, var(--cyan), var(--rose)); -webkit-background-clip: text; background-clip: text; color: transparent; }
+  .nav-liens { display: flex; gap: 8px; }
+  .btn { display: inline-flex; align-items: center; justify-content: center; gap: 8px; padding: 14px 22px; border-radius: 14px;
+    font-weight: 700; text-decoration: none; border: 1px solid var(--bord); background: var(--carte2); cursor: pointer; white-space: nowrap; }
+  .btn.petit { padding: 9px 14px; font-size: 15px; border-radius: 11px; }
+  .btn.principal { background: linear-gradient(90deg, var(--rose), #ff6a3d); border: 0; color: #fff; }
+  .btn.patreon { background: var(--patreon); border: 0; color: #fff; }
+  .btn:focus-visible { outline: 3px solid var(--cyan); outline-offset: 2px; }
+
+  .hero { display: grid; grid-template-columns: 1.1fr .9fr; gap: 40px; align-items: center; padding: 40px 0 64px; }
+  h1 { font-size: clamp(36px, 6vw, 60px); line-height: 1.05; margin: 0 0 18px; letter-spacing: -.03em; }
+  h1 em { font-style: normal; background: linear-gradient(90deg, var(--cyan), var(--rose)); -webkit-background-clip: text; background-clip: text; color: transparent; }
+  .accroche { color: var(--doux); font-size: 19px; margin: 0 0 26px; max-width: 34em; }
+  .actions { display: flex; gap: 12px; flex-wrap: wrap; }
+  .sous-btn { color: var(--doux); font-size: 14px; margin-top: 12px; }
+  .capture { justify-self: center; width: min(360px, 100%); border-radius: 28px; border: 1px solid var(--bord);
+    box-shadow: 0 30px 80px rgba(255, 61, 110, .18), 0 0 0 8px var(--carte); }
+
+  section { padding: 56px 0; border-top: 1px solid var(--bord); }
+  h2 { font-size: clamp(26px, 4vw, 36px); margin: 0 0 10px; letter-spacing: -.02em; }
+  .intro { color: var(--doux); margin: 0 0 30px; max-width: 40em; }
+  .grille { display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px; }
+  .bloc { background: var(--carte); border: 1px solid var(--bord); border-radius: 18px; padding: 20px; }
+  .bloc h3 { margin: 0 0 6px; font-size: 18px; }
+  .bloc p { margin: 0; color: var(--doux); font-size: 15px; }
+  .num { display: inline-grid; place-items: center; width: 34px; height: 34px; border-radius: 10px; background: var(--carte2);
+    color: var(--cyan); font-weight: 800; margin-bottom: 12px; }
+
+  .paliers { display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px; }
+  .palier { background: var(--carte); border: 1px solid var(--bord); border-radius: 20px; padding: 22px; display: flex; flex-direction: column; }
+  .palier.mis-en-avant { border-color: var(--patreon); box-shadow: 0 0 0 1px var(--patreon) inset; }
+  .palier .prix { font-size: 30px; font-weight: 800; margin: 4px 0 12px; }
+  .palier .prix small { font-size: 15px; color: var(--doux); font-weight: 500; }
+  .palier ul { margin: 0 0 18px; padding-left: 20px; color: var(--doux); font-size: 15px; flex: 1; }
+  .palier li { margin-bottom: 6px; }
+  .etiquette { align-self: flex-start; font-size: 12px; font-weight: 700; color: #fff; background: var(--patreon); padding: 3px 9px; border-radius: 999px; margin-bottom: 8px; }
+
+  details { background: var(--carte); border: 1px solid var(--bord); border-radius: 14px; padding: 16px 18px; margin-bottom: 10px; }
+  summary { cursor: pointer; font-weight: 700; }
+  details p { color: var(--doux); margin: 10px 0 0; font-size: 15px; }
+
+  footer { border-top: 1px solid var(--bord); padding: 28px 0 40px; color: var(--doux); font-size: 13px; }
+
+  @media (max-width: 820px) {
+    .hero { grid-template-columns: 1fr; padding-top: 16px; }
+    .grille, .paliers { grid-template-columns: 1fr; }
+    .nav-liens .btn:not(.patreon) { display: none; }
+  }
+</style>
+</head>
+<body>
+<div class="page">
+  <nav>
+    <a class="logo" href="#"><img src="icone.png" alt=""><b>Auto<span>Clip</span></b></a>
+    <div class="nav-liens">
+      <a class="btn petit" data-lien="discord" href="#">Discord</a>
+      <a class="btn petit patreon" data-lien="patreon" href="#">♥ Patreon</a>
+    </div>
+  </nav>
+
+  <header class="hero">
+    <div>
+      <h1>Tes clips Medal deviennent des <em>montages TikTok</em>. Tout seuls.</h1>
+      <p class="accroche">AutoClip trouve tes vrais kills Valorant, les cale pile sur le beat de ta musique et ajoute ralentis, flashs et transitions. Un clic, 20 secondes de rendu, prêt à publier.</p>
+      <div class="actions">
+        <a class="btn principal" data-lien="telecharger" href="#">⬇ Télécharger pour Windows</a>
+        <a class="btn patreon" data-lien="patreon" href="#">♥ Soutenir sur Patreon</a>
+      </div>
+      <p class="sous-btn">Gratuit · Windows 10/11 · Rien n'est envoyé sur internet</p>
+    </div>
+    <img class="capture" src="capture.png" alt="L'app AutoClip : formats TikTok ou YouTube, type de montage, musique et style">
+  </header>
+
+  <section>
+    <h2>3 étapes</h2>
+    <p class="intro">Pas de logiciel de montage, pas de timeline. Si tu as Medal, tu as déjà tout.</p>
+    <div class="grille">
+      <div class="bloc"><span class="num">1</span><h3>Installe</h3><p>AutoClip trouve tout seul ton dossier Medal. FFmpeg est inclus, rien d'autre à installer.</p></div>
+      <div class="bloc"><span class="num">2</span><h3>Ajoute une musique</h3><p>Ta chanson préférée en mp3. AutoClip détecte le tempo, les beats et le drop.</p></div>
+      <div class="bloc"><span class="num">3</span><h3>Génère</h3><p>Ton meilleur kill tombe sur le drop. Vertical 9:16 pour TikTok et Shorts, ou 16:9 pour YouTube.</p></div>
+    </div>
+  </section>
+
+  <section>
+    <h2>Ce qu'il fait</h2>
+    <p class="intro">Medal enregistre déjà tes kills. AutoClip s'en sert, donc chaque plan est un vrai kill, pas toi qui marches.</p>
+    <div class="grille">
+      <div class="bloc"><h3>Vrais kills, sur le beat</h3><p>2K, 3K, ace, clutch, one taps : les gros moments passent en premier, chaque coupe tombe sur un beat.</p></div>
+      <div class="bloc"><h3>Effets de montage pro</h3><p>Ralenti au drop, arrêt sur image, whip pan, glitch, flash, compteur de kills et textes ACE ou ONE TAP.</p></div>
+      <div class="bloc"><h3>Filtre par arme ou agent</h3><p>Un montage seulement à l'Operator, ou seulement sur Jett. AutoClip lit le fil des kills de tes clips.</p></div>
+      <div class="bloc"><h3>Copie un style</h3><p>Donne-lui un TikTok que tu aimes : AutoClip copie son rythme de coupes et ses flashs.</p></div>
+      <div class="bloc"><h3>Choisis tes kills</h3><p>Coche tes kills préférés et mets ta plus belle action sur le drop.</p></div>
+      <div class="bloc"><h3>Défi entre amis</h3><p>Compare tes kills de la semaine avec tes potes et fais des montages d'équipe.</p></div>
+    </div>
+  </section>
+
+  <section id="patreon">
+    <h2>Soutiens AutoClip sur Patreon</h2>
+    <p class="intro">AutoClip reste gratuit pour tout le monde. Les membres Patreon financent les nouvelles fonctions et reçoivent des bonus.</p>
+    <div class="paliers">
+      <div class="palier">
+        <h3>Supporter</h3>
+        <div class="prix">3 $ <small>/ mois</small></div>
+        <ul>
+          <li>Ton nom dans les remerciements du site</li>
+          <li>Rôle Supporter sur le Discord</li>
+          <li>Les coulisses du développement</li>
+        </ul>
+        <a class="btn patreon" data-lien="patreon" href="#">Choisir</a>
+      </div>
+      <div class="palier mis-en-avant">
+        <span class="etiquette">Le plus populaire</span>
+        <h3>Monteur</h3>
+        <div class="prix">6 $ <small>/ mois</small></div>
+        <ul>
+          <li>Tout le palier Supporter</li>
+          <li>Un pack de styles exclusif chaque mois</li>
+          <li>Les nouvelles versions 2 semaines avant tout le monde</li>
+        </ul>
+        <a class="btn patreon" data-lien="patreon" href="#">Choisir</a>
+      </div>
+      <div class="palier">
+        <h3>Pro</h3>
+        <div class="prix">12 $ <small>/ mois</small></div>
+        <ul>
+          <li>Tout le palier Monteur</li>
+          <li>Tu votes pour les prochaines fonctions</li>
+          <li>Aide prioritaire sur le Discord</li>
+        </ul>
+        <a class="btn patreon" data-lien="patreon" href="#">Choisir</a>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <h2>Questions</h2>
+    <details><summary>C'est vraiment gratuit ?</summary><p>Oui. Toutes les fonctions de montage sont gratuites. Patreon donne des bonus (packs de styles, accès anticipé) mais ne bloque rien.</p></details>
+    <details><summary>Il me faut quoi ?</summary><p>Un PC Windows 10 ou 11 (64 bits) et Medal pour enregistrer tes clips. AutoClip marche surtout avec Valorant : les autres jeux utilisent l'analyse du son, moins précise.</p></details>
+    <details><summary>Mes clips sont envoyés quelque part ?</summary><p>Non. Tout se passe sur ton PC. Seul le défi entre amis, si tu le rejoins, partage ton pseudo et tes stats de la semaine.</p></details>
+    <details><summary>Je peux utiliser n'importe quelle musique ?</summary><p>AutoClip accepte toutes tes chansons, mais pour publier, prends de la musique libre de droits. Autre option : monte avec la chanson tendance, puis remplace le son par la même chanson dans la bibliothèque de TikTok.</p></details>
+    <details><summary>Windows dit que l'app est inconnue</summary><p>C'est normal pour une nouvelle app pas encore signée. Clique sur « Informations complémentaires », puis « Exécuter quand même ».</p></details>
+  </section>
+
+  <footer>
+    AutoClip n'est pas affilié à Riot Games ni à Medal. Projet de fan réalisé dans le cadre de la politique « Legal Jibber Jabber » de Riot Games. Valorant est une marque de Riot Games, Inc.
+  </footer>
+</div>
+
+<script>
+  // Remplis ces liens avant de mettre le site en ligne.
+  const LIENS = {
+    telecharger: "https://github.com/TON-COMPTE/autoclip/releases/latest",
+    patreon: "https://www.patreon.com/c/TheAutoclip",
+    discord: "",
+  };
+  document.querySelectorAll("[data-lien]").forEach((a) => {
+    const url = LIENS[a.dataset.lien];
+    if (url) a.href = url; else a.hidden = true;
+  });
+</script>
+</body>
+</html>

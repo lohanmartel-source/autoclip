@@ -1,0 +1,16 @@
+.venv*/
+__pycache__/
+build/build/
+build/dist/
+build/sortie/
+build/ffmpeg/
+app/serveur.json
+app/index_kills.json
+app/vignettes/
+app/styles_copies/
+app/cartes/
+app/caster/
+app/clips_amis/
+app/morts.json
+app/voix_fortes.json
+*.log

@@ -1,0 +1,22 @@
+AutoClip — conditions d'utilisation
+
+AutoClip est gratuit. Tu peux l'installer et l'utiliser sur autant de PC que tu veux, et publier
+les montages que tu fais avec, y compris sur des chaînes monétisées.
+
+Tes données restent sur ton PC. AutoClip lit tes clips Medal et les fichiers de Medal pour trouver
+tes kills ; rien n'est envoyé sur internet, sauf si tu rejoins un « défi entre amis » : seuls ton
+pseudo et tes stats de la semaine (nombre de kills, one taps, 4K, aces) sont alors partagés avec
+les personnes qui ont le code du défi, et, si tu l'actives, de courts extraits de tes meilleurs kills
+(sans ton micro) pour le montage d'équipe.
+
+Musique : c'est toi qui choisis les chansons. Si tu publies tes montages, utilise de la musique que
+tu as le droit d'utiliser (libre de droits, ou ajoutée depuis la bibliothèque de TikTok ou YouTube).
+
+AutoClip n'est pas affilié à Riot Games, Medal ou TikTok. Valorant est une marque de Riot Games, Inc.
+AutoClip est un projet de fan réalisé dans le cadre de la politique « Legal Jibber Jabber » de Riot
+Games, sans approbation de Riot Games. Les éléments de Valorant restent la propriété de Riot Games.
+
+FFmpeg (ffmpeg.exe, ffprobe.exe) est inclus tel quel, sous licence GPL v3. Son code source est
+disponible sur https://ffmpeg.org et https://github.com/BtbN/FFmpeg-Builds.
+
+LOGICIEL FOURNI « TEL QUEL », SANS GARANTIE D'AUCUNE SORTE.

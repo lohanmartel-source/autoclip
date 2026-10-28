@@ -1,0 +1,6 @@
+librosa>=0.10
+numpy
+scipy
+soundfile
+edge-tts
+pywebview>=5.0
