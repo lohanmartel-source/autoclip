@@ -52,6 +52,8 @@
   .segments button.actif { background: var(--texte); color: var(--fond); font-weight: 600; }
   .bascule { display: flex; align-items: center; justify-content: space-between; min-height: 44px; gap: 12px; }
   .bascule small { display: block; color: var(--doux); font-size: 13px; }
+  .note-ia { display: block; color: var(--doux); font-size: 12px; margin-top: 4px; }
+  .bascule .note-ia { color: var(--rose); opacity: .85; }
   .bascule input { flex: none; width: 52px; height: 30px; appearance: none; -webkit-appearance: none; background: var(--bord); border-radius: 15px; position: relative; transition: .2s; }
   .bascule input::after { content: ""; position: absolute; top: 3px; left: 3px; width: 24px; height: 24px; border-radius: 50%; background: #fff; transition: .2s; }
   .bascule input:checked { background: var(--rose); } .bascule input:checked::after { background: var(--sur-action); } .bascule input:checked::after { left: 25px; }
@@ -179,6 +181,7 @@
   .liste-pro { margin: 0 0 14px; padding-left: 20px; color: var(--doux); font-size: 14px; }
   .puces button.verrou { opacity: .55; }
   .etapes { margin: 0; padding-left: 22px; display: grid; gap: 12px; }
+  .etapes li { min-width: 0; overflow-wrap: anywhere; }
   .etapes li b { display: block; }
   .etapes li span { color: var(--doux); font-size: 14px; }
   .etapes li.fait b::after { content: " ✓"; color: var(--cyan); }
@@ -300,9 +303,17 @@
     <div class="champ">
       <label class="titre">Style</label>
       <div class="segments" data-champ="style">
-        <button data-v="auto" class="actif">Auto</button><button data-v="phonk">Phonk</button><button data-v="cinematique">Ciné</button><button data-v="clean">Clean</button>
+        <button data-v="edit" class="actif">Edit</button><button data-v="auto">Auto</button><button data-v="phonk">Phonk</button><button data-v="cinematique">Ciné</button><button data-v="clean">Clean</button>
       </div>
-      <p class="astuce" id="infoStyle">Le mélange habituel d'AutoClip.</p>
+      <p class="astuce" id="infoStyle">Façon edits TikTok : whips et zooms flous, speed ramps, plans « vibe », halo lumineux.</p>
+    </div>
+
+    <div class="champ">
+      <label class="titre">Look</label>
+      <div class="segments" data-champ="look">
+        <button data-v="auto" class="actif">Auto</button><button data-v="neon">Néon</button><button data-v="glace">Glace</button><button data-v="chaud">Chaud</button><button data-v="aucun">Aucun</button>
+      </div>
+      <p class="astuce" id="infoLook">Les couleurs de tout le montage suivent la couleur de ton skin.</p>
     </div>
 
     <div class="champ">
@@ -389,6 +400,7 @@
     <div class="champ bascule"><span>Textes sur les kills (ONE TAP, ACE…)</span><input type="checkbox" id="textes" checked></div>
     <div class="champ bascule"><span>Multi-kills rapides en entier</span><input type="checkbox" id="sequences" checked></div>
     <div class="champ bascule"><span>Intro : teaser + rewind</span><input type="checkbox" id="hook" checked></div>
+    <div class="champ bascule"><span>Intro 3D<small>Après le teaser, ton clip devient une carte parmi tes autres clips, puis la caméra plonge dans la suite</small></span><input type="checkbox" id="intro_3d" checked></div>
     <div class="champ bascule"><span>Mes réactions au micro</span><input type="checkbox" id="voix" checked></div>
     <div class="champ bascule" data-capacite="sous_titres"><span>Sous-titres de ma voix</span><input type="checkbox" id="sous_titres" checked></div>
     <div class="champ" data-capacite="sous_titres">
@@ -404,6 +416,14 @@
       </div>
     </div>
     <div class="champ bascule"><span>Arrêt sur image au drop<small>L'image se fige, l'ennemi ressort avec un contour lumineux</small></span><input type="checkbox" id="arret_image" checked></div>
+    <div class="champ bascule"><span>Paroles dans le décor<small>Chaque mot chanté en énorme, derrière ton arme. Paroles trouvées sur internet (LRCLIB) ou dans un fichier .lrc du même nom que la musique</small><small class="note-ia">Synchro IA (Whisper) : le modèle (~480 Mo) se télécharge la 1re fois</small></span><input type="checkbox" id="paroles"></div>
+    <div class="champ" id="champChanson">
+      <label class="titre">Chanson (Artiste - Titre)</label>
+      <input type="text" id="titre_chanson" maxlength="120" placeholder="ex. Artiste - Titre (optionnel, sinon le nom du fichier)">
+      <label class="titre" style="margin-top:14px">Décalage des paroles <b id="valDecalage">0 s</b></label>
+      <input type="range" id="decalage_paroles" min="-0.5" max="0.5" step="0.05" value="0">
+      <small class="note-ia">Réglage fin de secours : vers la droite, les mots apparaissent plus tard</small>
+    </div>
     <div class="champ bascule" data-capacite="instrumental"><span>Musique sans paroles quand je parle<small>La voix du chanteur s'efface derrière la tienne (1 min d'analyse par nouvelle chanson)</small></span><input type="checkbox" id="instrumental" checked></div>
     <div class="champ bascule"><span>Mon pseudo en filigrane<small>En petit en haut à droite. Mets un fichier logo.png dans le dossier de données d'AutoClip (onglet Plus) pour utiliser ton logo.</small></span><input type="checkbox" id="filigrane"></div>
     <div class="champ bascule"><span>Aperçu rapide d'abord<small>Basse qualité en 30 s ; si ça te plaît, « Faire la version finale »</small></span><input type="checkbox" id="apercu"></div>
@@ -642,15 +662,23 @@
 const $ = (id) => document.getElementById(id);
 const choix = { rythme: "normal", cadrage: "flou", fps: "30", filtre: "tous", versions: "1", format: "vertical",
                 mode: "kills", langue_sous_titres: "fr", caster: "",
-                style: "auto", periode: "", joursKills: "1" };
+                style: "edit", look: "auto", periode: "", joursKills: "1" };
 let etat = null, dernierResultat = null, reglagesCharges = false, minuterie = null, onglet = "Montage";
 let jeuxChoisis = new Set(), armesChoisies = new Set(), agentsChoisis = new Set();
 let selection = new Map(), dropId = null, killsCharges = [], filtreKill = "tous";
 const INFO_STYLES = {
+  edit: "Façon edits TikTok : whips et zooms flous, speed ramps, plans « vibe », halo lumineux.",
   auto: "Le mélange habituel d'AutoClip.",
   phonk: "Agressif : glitchs, secousses, couleurs saturées. Va bien avec le rythme Nerveux.",
   cinematique: "Posé : zooms, light leaks, couleurs ciné, bandes noires en YouTube. Va bien avec Calme.",
   clean: "Propre : coupes nettes et zooms simples, sans glitch.",
+};
+const INFO_LOOKS = {
+  auto: "Les couleurs de tout le montage suivent la couleur de ton skin.",
+  neon: "Violet et magenta, ombres bleutées, très saturé.",
+  glace: "Bleu froid et cyan, propre et net.",
+  chaud: "Doré et orangé, ambiance coucher de soleil.",
+  aucun: "Les couleurs du style choisi, sans look.",
 };
 const esc = (s) => String(s ?? "").replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
 
@@ -753,6 +781,7 @@ function choisirSegment(champ, v, parUtilisateur) {
     $("detailsArmes").closest(".champ").classList.toggle("cache", special);
     document.querySelector('.segments[data-champ="filtre"]').closest(".champ").classList.toggle("cache", special);
   }
+  if (champ === "look") $("infoLook").textContent = INFO_LOOKS[v] || "";
   if (champ === "style") {
     $("infoStyle").textContent = INFO_STYLES[v] || "";
     if (parUtilisateur) {
@@ -774,11 +803,16 @@ const majValeurs = () => {
   $("valDuree").textContent = d >= 60 ? `${Math.floor(d / 60)} min ${d % 60 ? (d % 60) + " s" : ""}` : d + " s";
   $("valSon").textContent = $("son_jeu").value + " %";
   $("valDerniers").textContent = $("derniers").value;
+  const dp = +$("decalage_paroles").value;
+  $("valDecalage").textContent = dp === 0 ? "0 s" : (dp > 0 ? "+" : "−") + Math.abs(dp).toFixed(2).replace(".", ",") + " s";
 };
-["duree", "son_jeu", "derniers"].forEach((id) => $(id).addEventListener("input", majValeurs));
+["duree", "son_jeu", "derniers", "decalage_paroles"].forEach((id) => $(id).addEventListener("input", majValeurs));
+const majParoles = () => $("champChanson").classList.toggle("cache", !$("paroles").checked);
+$("paroles").addEventListener("change", majParoles);
+majParoles();
 
-const BOOLS = ["ralenti", "textes", "sequences", "hook", "voix", "sous_titres", "compteur", "effets_sonores", "outro", "filigrane",
-               "arret_image", "instrumental"];
+const BOOLS = ["ralenti", "textes", "sequences", "hook", "intro_3d", "voix", "sous_titres", "compteur", "effets_sonores", "outro", "filigrane",
+               "arret_image", "instrumental", "paroles"];
 function appliquerReglages(r) {
   if (!r) return;
   if (r.format) choisirSegment("format", r.format);
@@ -786,8 +820,11 @@ function appliquerReglages(r) {
   if (r.son_jeu !== undefined && r.son_jeu !== null) $("son_jeu").value = r.son_jeu;
   if (r.derniers) $("derniers").value = r.derniers;
   if (r.texte) $("texte").value = r.texte;
+  if (r.titre_chanson) $("titre_chanson").value = r.titre_chanson;
+  if (r.decalage_paroles !== undefined && r.decalage_paroles !== null) $("decalage_paroles").value = r.decalage_paroles;
   BOOLS.forEach((k) => { if (r[k] !== undefined && r[k] !== null) $(k).checked = !!r[k]; });
-  ["rythme", "filtre", "versions", "cadrage", "fps", "style", "mode", "langue_sous_titres", "caster"].forEach((k) => { if (r[k]) choisirSegment(k, r[k]); });
+  majParoles();
+  ["rythme", "filtre", "versions", "cadrage", "fps", "style", "look", "mode", "langue_sous_titres", "caster"].forEach((k) => { if (r[k]) choisirSegment(k, r[k]); });
   if (r.profil) profilVoulu = r.profil;
   if (Array.isArray(r.jeux)) jeuxChoisis = new Set(r.jeux);
   if (Array.isArray(r.armes)) armesChoisies = new Set(r.armes);
@@ -979,13 +1016,14 @@ function corpsMontage() {
   return {
     musique: $("musique").value, duree: +$("duree").value, rythme: choix.rythme, cadrage: choix.cadrage, filtre: choix.filtre,
     jeux: [...jeuxChoisis], textes: $("textes").checked, sequences: $("sequences").checked,
-    versions: choix.versions, hook: $("hook").checked, voix: $("voix").checked, sous_titres: $("sous_titres").checked,
+    versions: choix.versions, hook: $("hook").checked, intro_3d: $("intro_3d").checked, voix: $("voix").checked, sous_titres: $("sous_titres").checked,
     son_jeu: +$("son_jeu").value, ralenti: $("ralenti").checked, apercu: $("apercu").checked,
     texte: $("texte").value.trim(), debut_musique: $("debut_musique").value, derniers: +$("derniers").value, fps: choix.fps,
-    format: choix.format, style: choix.style, periode: choix.periode, compteur: $("compteur").checked,
+    format: choix.format, style: choix.style, look: choix.look, periode: choix.periode, compteur: $("compteur").checked,
     effets_sonores: $("effets_sonores").checked, outro: $("outro").checked,
     mode: choix.mode, langue_sous_titres: choix.langue_sous_titres, filigrane: $("filigrane").checked,
     caster: choix.caster, arret_image: $("arret_image").checked, instrumental: $("instrumental").checked,
+    paroles: $("paroles").checked, titre_chanson: $("titre_chanson").value.trim(), decalage_paroles: +$("decalage_paroles").value,
     profil: $("profil").value,
     armes: [...armesChoisies], agents: [...agentsChoisis],
   };

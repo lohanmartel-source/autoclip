@@ -1,5 +1,6 @@
 """Rendu FFmpeg : chaque plan est rendu à part (cadrage 9:16 + effets), puis tout est assemblé
-avec les transitions, la musique et le son du jeu."""
+avec les transitions, la musique et le son du jeu.
+Couleur d'accent du look (hex « #RRGGBB », pour teindre textes/paroles) : look.couleur_accent(r), aussi dans Rendu.accent."""
 from __future__ import annotations
 
 import os
@@ -31,6 +32,10 @@ class Rendu:
     instrumental: bool = False  # musique sans paroles pendant que tu parles
     gel: bool = False          # arrêt sur image + contour de l'ennemi au drop
     marque: bool = False       # « Fait avec AutoClip » (version gratuite)
+    look: str = "aucun"        # étalonnage du montage : auto / neon / glace / chaud / aucun (voir look.py)
+    accent: str = ""           # couleur d'accent « #RRGGBB » choisie par le look (rempli au rendu)
+    flou_mouvement: bool = True  # vrai flou de mouvement sur les whips, zooms et secousses
+    grain: bool = False        # grain fin (look pellicule)
 
     @property
     def base(self) -> int:
@@ -49,6 +54,7 @@ ETALONNAGES = {
     "cinematique": ("eq=contrast=1.06:saturation=0.92",
                     "colorbalance=rs=-0.05:bs=0.07:rh=0.07:bh=-0.05", "PI/4.8"),
     "clean": ("eq=contrast=1.04:saturation=1.12", "", None),
+    "edit": ("eq=contrast=1.1:saturation=1.25", "", "PI/5.2"),
 }
 
 
@@ -99,6 +105,18 @@ def _texte_pop(r: Rendu, texte: str, T: float, fin: float, grand: bool = True) -
     W, H = r.largeur, r.hauteur
     taille = int(r.base * (0.11 if grand else 0.09))
     fondu = min(0.2, max(0.05, (fin - T) / 3))
+    if r.style == "edit":
+        # Edit : texte plus petit, contour fin, halo de la couleur d'accent, posé bas (ne cache pas le kill).
+        import look as _look
+        taille = int(r.base * 0.065)
+        acc = _look.couleur_accent(r).lstrip("#")
+        return (f"drawtext=fontfile='{chemin_filtre(r.police)}':text='{texte}'"
+                f":fontsize='{taille}*(1+0.25*max(0,1-(t-{_n(T)})/0.1))'"
+                f":fontcolor=white:borderw={max(1, taille // 30)}:bordercolor=0x{acc}@0.9"
+                f":shadowx=0:shadowy=0"
+                f":alpha='0.92*min(1,max(0,(t-{_n(T)})/0.04))*max(0,min(1,({_n(fin)}-t)/{_n(fondu)}))'"
+                f":x=(w-text_w)/2:y='h*0.7'"
+                f":enable='between(t,{_n(T)},{_n(fin)})'")
     return (f"drawtext=fontfile='{chemin_filtre(r.police)}':text='{texte}'"
             f":fontsize='{taille}*(1+0.6*max(0,1-(t-{_n(T)})/0.12))'"
             f":fontcolor=white:borderw={max(3, taille // 14)}:bordercolor=black@0.85"
@@ -108,6 +126,16 @@ def _texte_pop(r: Rendu, texte: str, T: float, fin: float, grand: bool = True) -
             f":enable='between(t,{_n(T)},{_n(fin)})'")
 
 
+# Dosage des effets de beat/kill. « defaut » = comportement historique des styles auto/phonk/…,
+# « edit » = dosage des edits TikTok de référence (plus doux, décroissances exponentielles).
+DOSAGES = {
+    "defaut": {"punch": 0.30, "shake_z": 0.10, "shake_xy": 0.75, "shake_d": 0.45, "flash": 0.65,
+               "flash_d": 0.2, "rgb": 16, "rgb_d": 0.18, "negate": True, "pulse": 0.045},
+    "edit": {"punch": 0.2, "shake_z": 0.035, "shake_xy": 0.32, "shake_d": 0.1, "flash": 0.2,
+             "flash_d": 0.09, "rgb": 7, "rgb_d": 0.12, "negate": False, "pulse": None},
+}
+
+
 def _effets(seg: Segment, r: Rendu) -> str:
     """Construit la chaîne d'effets d'un plan.
 
@@ -115,46 +143,89 @@ def _effets(seg: Segment, r: Rendu) -> str:
       z(t)  = 1 + somme des zooms,
       kx/ky = décalage horizontal/vertical entre -1 et 1 (en fraction de la marge dispo).
     Les effets « kill » se déclenchent à Tk (moment du kill, sur un beat), les transitions coupées
-    au début (entrée) ou à la fin (sortie) du plan.
+    au début (entrée) ou à la fin (sortie) du plan. Pendant les mouvements rapides, le zoompan est
+    sur-échantillonné puis moyenné (vrai flou de mouvement, voir mouvement.py).
     """
+    import look as _look
+    import mouvement
     W, H, fps = r.largeur, r.hauteur, r.fps
     T0 = seg.images_transition / fps
     D = seg.images_totales / fps
     Tk = seg.t_kill if seg.t_kill is not None else T0
     z, kx, ky, lum, a_rot, g_r, g_b = [], [], [], [], [], [], []
-    filtres_avant, filtres_apres = [], []
+    filtres_apres = []
+    fen_mvt = []                     # fenêtres (s) de mouvement rapide : flou de mouvement
+    edit = r.style == "edit"
+    dz = DOSAGES["edit" if edit else "defaut"]
+    flou_vrai = r.flou_mouvement
+    echelle = r.base / 1080
 
     def fenetre(nom, debut, fin, *args):
         filtres_apres.append(f"{nom}=" + ":".join(args) + f":enable='between(t,{_n(debut)},{_n(fin)})'")
 
+    def env_dec(t, duree, var="it"):
+        """Enveloppe 1 -> 0 après t : exponentielle (edit) ou linéaire (historique)."""
+        if edit:
+            return f"exp(-({var}-{_n(t)})/{_n(duree)})*gte({var},{_n(t)})*lt({var},{_n(t + 5 * duree)})"
+        return f"max(0,1-({var}-{_n(t)})/{_n(duree)})*gte({var},{_n(t)})"
+
+    def secousse(t):
+        env = env_dec(t, dz["shake_d"])
+        f1, f2 = (11, 8) if edit else (17, 13)
+        z.append(f"{dz['shake_z']}*{env}")
+        kx.append(f"{dz['shake_xy']}*{env}*sin(2*PI*(it-{_n(t)})*{f1})")
+        ky.append(f"{dz['shake_xy']}*{env}*cos(2*PI*(it-{_n(t)})*{f2})")
+        fen_mvt.append((t, t + (0.3 if edit else 0.35), 0.4))
+
+    def aberration(t, duree, px):
+        px = max(2, int(round(px * (echelle if edit else 1))))
+        if edit:   # décroît : fort 2 images, puis moitié
+            fenetre("rgbashift", t, t + duree * 0.45, f"rh=-{px}", f"bh={px}", "edge=smear")
+            fenetre("rgbashift", t + duree * 0.45, t + duree, f"rh=-{max(1, px // 2)}", f"bh={max(1, px // 2)}",
+                    "edge=smear")
+        else:
+            fenetre("rgbashift", t, t + duree, f"rh=-{px}", f"bh={px}", "edge=smear")
+
+    def flash(t, force=1.0):
+        lum.append(f"{dz['flash'] * force:.3f}*{env_dec(t, dz['flash_d'], 't')}")
+
     # ---- effets sur le kill
     effets = set(seg.effets)
     if "punch" in effets:
-        z.append(f"0.30*pow(max(0,1-(it-{_n(Tk)})/0.35),2)*gte(it,{_n(Tk)})")
+        if edit:
+            z.append(f"{dz['punch']}*{env_dec(Tk, 0.16)}")
+        else:
+            z.append(f"0.30*pow(max(0,1-(it-{_n(Tk)})/0.35),2)*gte(it,{_n(Tk)})")
+        fen_mvt.append((Tk, Tk + 0.22, 0.5))
     if "zoom_leger" in effets:
         z.append(f"0.10*pow(max(0,1-(it-{_n(T0)})/0.5),2)*gte(it,{_n(T0)})")
     if "pulse" in effets:
-        for b in seg.beats_locaux(fps):
+        forces = seg.forces_beats or []
+        for i, b in enumerate(seg.beats_locaux(fps)):
             if b < D - 0.05:
-                z.append(f"0.045*max(0,1-(it-{_n(b)})/0.2)*gte(it,{_n(b)})")
+                if dz["pulse"] is not None:
+                    z.append(f"{dz['pulse']}*max(0,1-(it-{_n(b)})/0.2)*gte(it,{_n(b)})")
+                else:
+                    # Pulse sur les temps forts seulement, dosé par la force du beat.
+                    f = forces[i] if i < len(forces) else 0.5
+                    if f >= 0.3:
+                        z.append(f"{0.018 + 0.04 * min(1.0, f):.3f}*{env_dec(b, 0.1)}")
     if "monte" in effets:
         z.append(f"0.16*pow(it/{_n(D)},2)")
     if "shake" in effets:
-        env = f"gte(it,{_n(Tk)})*max(0,1-(it-{_n(Tk)})/0.45)"
-        z.append(f"0.10*{env}")
-        kx.append(f"0.75*{env}*sin(2*PI*(it-{_n(Tk)})*17)")
-        ky.append(f"0.75*{env}*cos(2*PI*(it-{_n(Tk)})*13)")
+        secousse(Tk)
     if "flash" in effets:
-        lum.append(f"0.65*max(0,1-(t-{_n(Tk)})/0.2)*gte(t,{_n(Tk)})")
-    if "impact" in effets:   # « impact frame » : couleurs inversées 2 images sur le kill
+        flash(Tk)
+    if "impact" in effets and dz["negate"]:   # « impact frame » : couleurs inversées 2 images sur le kill
         filtres_apres.append(f"negate=enable='between(t,{_n(Tk)},{_n(Tk + 1.5 / fps)})'")
-    if "rgb" in effets:
-        fenetre("rgbashift", Tk, Tk + 0.18, "rh=-16", "bh=16", "edge=smear")
+    if "rgb" in effets or (edit and "impact" in effets):
+        aberration(Tk, dz["rgb_d"], dz["rgb"])
     if "gel" in effets and seg.morceaux and seg.morceaux[0].gel:
         # Pendant l'arrêt sur image : zoom lent vers le viseur, puis on relâche.
         gd = seg.morceaux[0].images / fps
         z.append(f"0.22*min(1,(it-{_n(T0)})/{_n(gd)})*lt(it,{_n(T0 + gd)})*gte(it,{_n(T0)})")
         z.append(f"0.22*max(0,1-(it-{_n(T0 + gd)})/0.2)*gte(it,{_n(T0 + gd)})")
+        fen_mvt.append((T0 + gd, T0 + gd + 0.2))
     if "rewind" in effets:
         # Look « cassette qui rembobine » : couleurs délavées, lignes, bruit, décalage RGB.
         filtres_apres.append("eq=saturation=0.55:contrast=1.15")
@@ -171,39 +242,62 @@ def _effets(seg: Segment, r: Rendu) -> str:
         # Chaque kill de la séquence frappe : petit zoom + flash ; le dernier frappe fort.
         temps = [t for t, _ in seg.kills_sortie]
         for t in temps[:-1]:
-            z.append(f"0.14*pow(max(0,1-(it-{_n(t)})/0.25),2)*gte(it,{_n(t)})")
-            lum.append(f"0.35*max(0,1-(t-{_n(t)})/0.12)*gte(t,{_n(t)})")
-            fenetre("rgbashift", t, t + 0.1, "rh=-10", "bh=10", "edge=smear")
+            if edit:
+                z.append(f"0.1*{env_dec(t, 0.12)}")
+                flash(t, 0.6)
+                aberration(t, 0.08, dz["rgb"] * 0.7)
+            else:
+                z.append(f"0.14*pow(max(0,1-(it-{_n(t)})/0.25),2)*gte(it,{_n(t)})")
+                lum.append(f"0.35*max(0,1-(t-{_n(t)})/0.12)*gte(t,{_n(t)})")
+                fenetre("rgbashift", t, t + 0.1, "rh=-10", "bh=10", "edge=smear")
+            fen_mvt.append((t, t + 0.18, 0.5))
         tl = temps[-1]
-        z.append(f"0.30*pow(max(0,1-(it-{_n(tl)})/0.35),2)*gte(it,{_n(tl)})")
-        lum.append(f"0.65*max(0,1-(t-{_n(tl)})/0.2)*gte(t,{_n(tl)})")
-        env = f"gte(it,{_n(tl)})*max(0,1-(it-{_n(tl)})/0.45)"
-        z.append(f"0.10*{env}")
-        kx.append(f"0.75*{env}*sin(2*PI*(it-{_n(tl)})*17)")
-        ky.append(f"0.75*{env}*cos(2*PI*(it-{_n(tl)})*13)")
-        filtres_apres.append(f"negate=enable='between(t,{_n(tl)},{_n(tl + 1.5 / fps)})'")
+        if edit:
+            z.append(f"{dz['punch']}*{env_dec(tl, 0.16)}")
+            flash(tl)
+            aberration(tl, dz["rgb_d"], dz["rgb"])
+        else:
+            z.append(f"0.30*pow(max(0,1-(it-{_n(tl)})/0.35),2)*gte(it,{_n(tl)})")
+            lum.append(f"0.65*max(0,1-(t-{_n(tl)})/0.2)*gte(t,{_n(tl)})")
+        fen_mvt.append((tl, tl + 0.25, 0.5))
+        secousse(tl)
+        if dz["negate"]:
+            filtres_apres.append(f"negate=enable='between(t,{_n(tl)},{_n(tl + 1.5 / fps)})'")
 
     # ---- transition d'entrée (début du plan, coupe sur le beat)
     e = seg.entree
     if e == "whip":       # arrive de la droite avec un flou de mouvement
         z.append("0.45*max(0,1-it/0.22)")
         kx.append("pow(max(0,1-it/0.18),2)")
-        fenetre("avgblur", 0, 0.07, "sizeX=60", "sizeY=1")
-        fenetre("avgblur", 0.07, 0.13, "sizeX=22", "sizeY=1")
+        fen_mvt.append((0, 0.24))
+        if not flou_vrai:
+            fenetre("avgblur", 0, 0.07, "sizeX=60", "sizeY=1")
+            fenetre("avgblur", 0.07, 0.13, "sizeX=22", "sizeY=1")
+        else:      # complément : la 1re image part très floue (le flou réel fait le reste)
+            fenetre("avgblur", 0, 1.0 / fps, f"sizeX={int(30 * echelle) + 2}", "sizeY=1")
     elif e == "zoom":     # dézoom rapide depuis un gros plan flou
         z.append("0.7*pow(max(0,1-it/0.2),2)")
-        fenetre("gblur", 0, 0.07, "sigma=12")
-        fenetre("gblur", 0.07, 0.13, "sigma=5")
+        fen_mvt.append((0, 0.22))
+        if not flou_vrai:
+            fenetre("gblur", 0, 0.07, "sigma=12")
+            fenetre("gblur", 0.07, 0.13, "sigma=5")
+        else:
+            fenetre("gblur", 0, 1.0 / fps, "sigma=5")
     elif e == "spin":     # rotation qui se remet droite
         a_rot.append("0.3*pow(max(0,1-t/0.2),2)")
         z.append("0.6*max(0,1-it/0.22)")
-        fenetre("gblur", 0, 0.08, "sigma=6")
+        fen_mvt.append((0, 0.22))
+        if not flou_vrai:
+            fenetre("gblur", 0, 0.08, "sigma=6")
     elif e == "glitch":
         fenetre("rgbashift", 0, 0.12, "rh=-28", "gv=10", "bh=28", "edge=wrap")
         fenetre("noise", 0, 0.09, "alls=45", "allf=t")
         filtres_apres.append(f"negate=enable='between(t,0,{_n(1.5 / fps)})'")
     elif e == "flash":
-        lum.append("0.8*max(0,1-t/0.15)")
+        if edit:
+            lum.append(f"0.45*{env_dec(0, 0.08, 't')}")
+        else:
+            lum.append("0.8*max(0,1-t/0.15)")
     elif e == "leak":     # « light leak » : éclat chaud orangé qui s'efface
         lum.append("0.35*max(0,1-t/0.3)")
         g_r.append("0.6*max(0,1-t/0.3)")
@@ -213,27 +307,44 @@ def _effets(seg: Segment, r: Rendu) -> str:
         z.append(f"0.12*{env}")
         kx.append(f"0.9*{env}*sin(2*PI*it*14)")
         ky.append(f"0.9*{env}*cos(2*PI*it*11)")
+        fen_mvt.append((0, 0.3))
 
     # ---- transition de sortie (fin du plan, juste avant la coupe)
     s = seg.sortie
     if s == "whip":       # part vers la gauche
         z.append(f"0.45*max(0,(it-{_n(D - 0.22)})/0.22)")
         kx.append(f"(0-pow(max(0,(it-{_n(D - 0.18)})/0.18),2))")
-        fenetre("avgblur", D - 0.12, D, "sizeX=50", "sizeY=1")
+        fen_mvt.append((D - 0.22, D))
+        if not flou_vrai:
+            fenetre("avgblur", D - 0.12, D, "sizeX=50", "sizeY=1")
+        else:
+            fenetre("avgblur", D - 1.0 / fps, D, f"sizeX={int(30 * echelle) + 2}", "sizeY=1")
     elif s == "zoom":     # zoom avant rapide vers la coupe
         z.append(f"0.7*pow(max(0,(it-{_n(D - 0.18)})/0.18),2)")
-        fenetre("gblur", D - 0.1, D, "sigma=10")
+        fen_mvt.append((D - 0.2, D))
+        if not flou_vrai:
+            fenetre("gblur", D - 0.1, D, "sigma=10")
+        else:
+            fenetre("gblur", D - 1.0 / fps, D, "sigma=5")
     elif s == "spin":
         a_rot.append(f"(0-0.3*pow(max(0,(t-{_n(D - 0.2)})/0.2),2))")
         z.append(f"0.6*max(0,(it-{_n(D - 0.22)})/0.22)")
-        fenetre("gblur", D - 0.08, D, "sigma=6")
+        fen_mvt.append((D - 0.22, D))
+        if not flou_vrai:
+            fenetre("gblur", D - 0.08, D, "sigma=6")
     elif s == "flash":
-        lum.append(f"0.8*max(0,(t-{_n(D - 0.1)})/0.1)")
+        if edit:
+            lum.append(f"0.4*pow(max(0,(t-{_n(D - 0.1)})/0.1),2)")
+        else:
+            lum.append(f"0.8*max(0,(t-{_n(D - 0.1)})/0.1)")
 
+    # ---- couleurs (look du montage ou étalonnage du style)
     f = []
-    if a_rot:
-        f.append(f"rotate=a='{'+'.join(a_rot)}':fillcolor=black")
     eq, couleur, vignette = ETALONNAGES.get(r.style, ETALONNAGES["auto"])
+    du_look = _look.couleurs(r)
+    if du_look is not None:
+        eq, couleur = du_look
+    finition = du_look is not None or edit
     if lum:
         eq += f":brightness='min(0.9,{'+'.join(lum)})'"
     if g_r:
@@ -244,14 +355,36 @@ def _effets(seg: Segment, r: Rendu) -> str:
     if couleur:
         f.append(couleur)
     f.append("unsharp=5:5:0.5")
+    graphe = ["[vb]" + ",".join(f) + "[vcol]"]
+
+    # ---- caméra virtuelle (rotation + zoompan), avec flou de mouvement réel si activé
+    camera = [f"rotate=a='{'+'.join(a_rot)}':fillcolor=black"] if a_rot else []
+    total = seg.images_totales
     if z or kx or ky:
         zz = "1+" + "+".join(z) if z else "1"
         borne = lambda termes: f"max(-1,min(1,{'+'.join(termes)}))" if termes else "0"
-        f.append(f"zoompan=z='{zz}':x='(iw/2-iw/zoom/2)*(1+{borne(kx)})'"
-                 f":y='(ih/2-ih/zoom/2)*(1+{borne(ky)})':d=1:s={W}x{H}:fps={fps}")
-    f += filtres_apres
-    if vignette:
-        f.append(f"vignette={vignette}")   # bords légèrement assombris
+        zoompan = (f"zoompan=z='{zz}':x='(iw/2-iw/zoom/2)*(1+{borne(kx)})'"
+                   f":y='(ih/2-ih/zoom/2)*(1+{borne(ky)})':d=1:s={W}x{H}:fps={{FPS}}")
+        fen = [(int(f_[0] * fps), int(round(f_[1] * fps)) + 1, f_[2] if len(f_) > 2 else 1.0)
+               for f_ in fen_mvt] if flou_vrai else []
+        n_sous = 6 if fps <= 30 else 3
+        graphe.append(mouvement.graphe_camera("vcol", "vcam", camera, zoompan, fen, total, fps, n_sous))
+    elif camera:
+        graphe.append("[vcol]" + ",".join(camera) + "[vcam]")
+    else:
+        graphe.append("[vcol]null[vcam]")
+
+    f = list(filtres_apres)
+    if finition:
+        # Bloom + vignette légère (+ grain) : même finition sur tout le montage.
+        graphe.append(_look.chaine_finition(r, "vcam", "vfin"))
+        entree = "vfin"
+    else:
+        entree = "vcam"
+        if vignette:
+            f.append(f"vignette={vignette}")   # bords légèrement assombris
+    if not f:
+        f.append("null")
     if r.style == "cinematique" and r.horizontal:
         # Bandes noires « cinémascope » (2.39:1).
         bande = int((H - W / 2.39) / 2)
@@ -271,7 +404,8 @@ def _effets(seg: Segment, r: Rendu) -> str:
         f.append("fade=t=in:st=0:d=0.35")
     if "fondu_fin" in effets:
         f.append(f"fade=t=out:st={max(0, D - 0.6):.3f}:d=0.6")
-    return "[vb]" + ",".join(f) + ",setsar=1,format=yuv420p[vout]"
+    graphe.append(f"[{entree}]" + ",".join(f) + ",setsar=1,format=yuv420p[vout]")
+    return ";".join(graphe)
 
 
 def rendre_segment(seg: Segment, sortie: Path, r: Rendu) -> Path:
@@ -308,10 +442,30 @@ def rendre_segment(seg: Segment, sortie: Path, r: Rendu) -> Path:
             continue
         inverse_v = ",reverse" if mo.inverse else ""
         inverse_a = ",areverse" if mo.inverse else ""
+        import mouvement   # speed ramps lissés + images fondues quand la source manque d'images
+        vitesse_v = f"setpts=(PTS-STARTPTS)/{mo.vitesse:.4f},{mouvement.conversion_fps(m.clip, r.fps, mo.vitesse)}"
+        wav = None
+        if mo.rampe:
+            flou_v = mouvement.filtre_flou_vitesse(mo.rampe, mo.images, r.fps)
+            vitesse_v = (f"setpts=PTS-STARTPTS,{mouvement.filtre_setpts(mo.rampe, mo.images, r.fps)},"
+                         + (flou_v + "," if flou_v else "")
+                         + mouvement.conversion_fps(m.clip, r.fps, min(v for _, v in mo.rampe)))
+            if m.a_audio:
+                wav = mouvement.audio_rampe(m.clip, piste, mo.debut, mo.rampe, mo.images, r.fps,
+                                            sortie.with_name(f"rampe_{seg.index:02d}_{i}.wav"))
+        if r.style == "edit" and r.flou_mouvement and not mo.inverse:
+            # Flicks du joueur : flou directionnel proportionnel à la vitesse de la caméra.
+            flick = mouvement.filtre_flou_camera(m.clip, mo.debut, mo.duree_source(r.fps), m.largeur)
+            if flick:
+                vitesse_v = f"setpts=PTS-STARTPTS,{flick},{vitesse_v}"
         parties.append(
-            f"[{i}:v]setpts=(PTS-STARTPTS)/{mo.vitesse:.4f},fps={r.fps},"
+            f"[{i}:v]{vitesse_v},"
             f"tpad=stop_mode=clone:stop_duration=2,trim=end_frame={mo.images},setpts=PTS-STARTPTS{inverse_v}[v{i}]")
-        if m.a_audio:
+        if wav is not None:
+            cmd += ["-i", str(wav)]
+            parties.append(f"[{cmd.count('-i') - 1}:a]aformat=sample_rates=48000:channel_layouts=stereo,apad,"
+                           f"atrim=duration={d:.4f},asetpts=PTS-STARTPTS[a{i}]")
+        elif m.a_audio:
             src = f"{i}:{piste}" if piste is not None else f"{i}:a"
             parties.append(
                 f"[{src}]asetpts=PTS-STARTPTS,{_atempo(mo.vitesse)},aresample=48000,"
@@ -339,17 +493,65 @@ def rendre_segment(seg: Segment, sortie: Path, r: Rendu) -> Path:
 
 def rendre_segments(segments: list[Segment], dossier: Path, r: Rendu, log=print) -> list[Path]:
     fichiers = [dossier / f"plan_{s.index:02d}.mkv" for s in segments]
+    import look   # look du montage (couleur dominante en mode auto) : choisi une fois, avant les plans
+    look.preparer(segments, r, log)
     travailleurs = max(1, min(4, (os.cpu_count() or 2) // 2))
     fait = 0
 
     def tache(args):
         return rendre_segment(*args, r)
 
+    # L'intro 3D a besoin de la dernière image du hook et de la première du plan suivant : elle est
+    # rendue après les autres plans.
+    intros = [i for i, s in enumerate(segments) if s.role == "intro3d"]
+    autres = [i for i in range(len(segments)) if i not in intros]
     with ThreadPoolExecutor(max_workers=travailleurs) as ex:
-        for _ in ex.map(tache, zip(segments, fichiers)):
+        for _ in ex.map(tache, [(segments[i], fichiers[i]) for i in autres]):
             fait += 1
             log(f"  plan {fait}/{len(segments)} rendu")
+    for i in intros:
+        _rendre_intro_3d(segments, fichiers, i, r, log)
+        fait += 1
+        log(f"  plan {fait}/{len(segments)} rendu")
     return fichiers
+
+
+def _rendre_intro_3d(segments: list[Segment], fichiers: list[Path], i: int, r: Rendu, log=print) -> None:
+    """Rend l'intro 3D du plan i. Si quoi que ce soit échoue, le plan redevient le rewind habituel."""
+    seg = segments[i]
+    try:
+        import time
+        import intro_3d
+        debut = time.time()
+        if i < 1 or i + 1 >= len(segments):
+            raise ValueError("pas de hook avant ou pas de plan après")
+        W, H = r.largeur, r.hauteur
+        depart = intro_3d.derniere_image(fichiers[i - 1], W, H)
+        cible = intro_3d.premiere_image(fichiers[i + 1], W, H)
+        if depart is None or cible is None:
+            raise ValueError("images du hook ou du plan suivant illisibles")
+        sources = list(seg.cartes)
+        if len(sources) < 12:
+            # Pas assez de kills : d'autres clips du dossier complètent le nuage (une image à 3 s).
+            deja = {Path(c) for c, _ in sources} | {s.moment.clip for s in segments}
+            dossiers = {Path(c).parent for c, _ in sources} | {seg.moment.clip.parent}
+            for d in sorted(dossiers):
+                for f in sorted(d.glob("*.mp4"), key=lambda x: x.stat().st_mtime, reverse=True)[:40]:
+                    if f not in deja and len(sources) < 16:
+                        sources.append((f, 3.0))
+        cartes = intro_3d.images_cartes(sources)
+        intro_3d.rendre_intro(depart, cartes, cible, fichiers[i], r.fps, seg.images_totales,
+                              graine=seg.index * 31 + len(cartes),
+                              preset="veryfast", crf="16")
+        log(f"  intro 3D rendue en {time.time() - debut:.1f} s ({len(cartes)} cartes)")
+    except Exception as e:  # noqa: BLE001  (on revient toujours au rewind plutôt que d'échouer)
+        log(f"  intro 3D impossible ({e}) : rewind à la place")
+        seg.role, seg.effets = "rewind", ["rewind"]
+        rendre_segment(seg, fichiers[i], r)
+        if i + 1 < len(segments) and segments[i + 1].role in ("montee", "approche"):
+            # Comme après un rewind : coupe franche avec flash sur le plan suivant.
+            segments[i + 1].entree = "flash"
+            rendre_segment(segments[i + 1], fichiers[i + 1], r)
 
 
 def debuts_plans(segments: list[Segment], fps: int) -> list[float]:
@@ -554,10 +756,16 @@ def evenements_montage(segments: list[Segment], fps: int) -> dict:
     for s, d in zip(segments, debuts):
         temps = [d + t for t in s.temps_kills()]
         kills += temps
-        if s.role not in ("hook", "rewind"):
+        if s.role not in ("hook", "rewind", "intro3d"):
             compteur += temps
         if s.role == "rewind":
             sons.append(("rewind", d, s.images_totales / fps))
+        elif s.role == "intro3d":
+            # Whoosh au début du recul, et un autre sur la poussée finale (sommet pile sur la coupe).
+            from intro_3d import phases
+            ph = phases(s.images_totales / fps)
+            sons.append(("whoosh", d + ph["recul"] + 0.25, 0))
+            sons.append(("whoosh", d + ph["fin"], 0))
         elif s.role == "approche":
             sons.append(("riser", d + s.images_totales / fps, min(3.0, s.images_totales / fps)))
         if (s.role in ("drop", "hook") or s.moment.etiquette in ("Rire", "Cri")) and s.t_kill is not None:
@@ -629,7 +837,10 @@ def assembler(segments: list[Segment], fichiers: list[Path], musique: Path, debu
         cmd += ["-i", str(fch)]
     n = len(fichiers)
 
-    parties = [f"[{i}:v]setsar=1,settb=AVTB,fps={r.fps}[vi{i}]" for i in range(n)]
+    # Chaque plan est ramené à sa longueur prévue (dernière image répétée s'il en manque, par ex. un
+    # kill tout à la fin du clip) : sinon les décalages des fondus glissent et l'image finit trop tôt.
+    parties = [f"[{i}:v]setsar=1,settb=AVTB,fps={r.fps},tpad=stop_mode=clone:stop={segments[i].images_totales},"
+               f"trim=end_frame={segments[i].images_totales}[vi{i}]" for i in range(n)]
     cv, ca = "vi0", "0:a"
     longueur = segments[0].images_totales / r.fps
     evts = evenements_montage(segments, r.fps)
@@ -669,11 +880,12 @@ def assembler(segments: list[Segment], fichiers: list[Path], musique: Path, debu
         from licence import MARQUE
         f_marque = dossier / "marque.txt"
         f_marque.write_text(MARQUE, encoding="utf-8")
-        taille = int(r.base * 0.034)
-        y = "h*0.70" if not r.horizontal else "h*0.92"
+        # Petite, discrète, dans le coin en bas à gauche (jamais au centre de l'image ni sur le kill).
+        taille = max(12, int(r.base * 0.024))
+        y = "h*0.75" if not r.horizontal else "h-text_h-h*0.03"
         video_fin += (f",drawtext=fontfile='{chemin_filtre(r.police)}':textfile='{chemin_filtre(f_marque)}'"
-                      f":fontsize={taille}:fontcolor=white@0.75:borderw=2:bordercolor=black@0.5"
-                      f":x=(w-text_w)/2:y={y}")
+                      f":fontsize={taille}:fontcolor=white@0.5:borderw=1:bordercolor=black@0.35"
+                      f":x=w*0.04:y={y}")
     from chemins import DONNEES as _DONNEES
     logo = _DONNEES / "logo.png"
     if logo.exists():
@@ -780,7 +992,7 @@ def miniature(segments: list[Segment], r: Rendu, sortie: Path, accroche: str = "
            "-filter_complex", ";".join(filtres), "-map", "[vout]", "-frames:v", "1", "-q:v", "2", str(sortie)]
     try:
         executer(cmd)
-        return sortie
+        return sortie if sortie.exists() else None   # FFmpeg peut réussir sans écrire d'image
     except Exception:
         return None
 

@@ -136,7 +136,14 @@ def sous_titrer(reactions: list[Reaction], log=print, langue: str = "fr") -> Non
     try:
         if _modele is None:
             log("  chargement de Whisper (sous-titres)…")
-            _modele = WhisperModel("small", device="cpu", compute_type="int8")
+            # Même dossier de modèles que la synchro des paroles (DONNEES/modeles, progression dans
+            # le journal) ; repli : le cache HuggingFace habituel.
+            try:
+                from synchro_paroles import chemin_modele
+                chemin = chemin_modele("small", log) or "small"
+            except Exception:
+                chemin = "small"
+            _modele = WhisperModel(chemin, device="cpu", compute_type="int8")
     except Exception as e:
         log(f"  sous-titres indisponibles ({e})")
         return

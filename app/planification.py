@@ -41,7 +41,12 @@ STYLES = {
         "effets_interdits": {"rgb", "impact", "shake"},
         "entrees": {"glitch": "zoom", "secousse": "whip", "spin": "whip", "leak": "zoom"},
     },
+    "edit": {       # façon edits TikTok à succès : whips et zooms flous, speed ramps, plans « vibe »
+        "effets_interdits": {"impact"},
+        "entrees": {"glitch": "whip", "spin": "zoom", "leak": "zoom"},
+    },
 }
+TRANSITIONS_EDIT = ["hblur", "zoomin", "fade", "hblur", "zoomin"]   # fondus doux de la montée (style edit)
 
 
 @dataclass
@@ -52,6 +57,7 @@ class Morceau:
     images: int       # nombre d'images en sortie
     inverse: bool = False  # lu à l'envers (effet rewind)
     gel: bool = False      # arrêt sur image (l'image à « debut » reste figée)
+    rampe: list | None = None  # speed ramp : [(u 0-1 sur le morceau, vitesse), …] ; vitesse = moyenne
 
     def duree_source(self, fps: int) -> float:
         return self.images / fps * self.vitesse
@@ -76,6 +82,9 @@ class Segment:
     t_kill: float | None = None     # moment du kill dans ce plan (s, depuis le début du plan rendu)
     texte: str = ""                 # texte affiché au kill (ONE TAP, ACE, 4K…)
     kills_sortie: list = field(default_factory=list)  # séquence : [(temps dans le plan, texte), …]
+    cartes: list = field(default_factory=list)  # intro 3D : [(clip, instant du kill), …] des cartes du nuage
+    vibe: bool = False              # plan sans kill (déplacement avant l'action), calé sur la musique
+    forces_beats: list = field(default_factory=list)  # force de la musique sur chaque beat du plan
 
     def temps_kills(self) -> list[float]:
         if self.kills_sortie:
@@ -144,7 +153,7 @@ def planifier(musique: Musique, moments: list[Moment], fps: int, rythme: str = "
               ralenti: float = 0.5, graine: int | None = None,
               sequence: Moment | None = None, hook: bool = False,
               style: str = "auto", gel: bool = False,
-              profil: dict | None = None) -> tuple[list[Segment], float, float]:
+              profil: dict | None = None, intro_3d: bool = False) -> tuple[list[Segment], float, float]:
     """Retourne (segments, décalage du début de la musique, durée du montage)."""
     if not moments:
         raise ValueError("aucun moment")
@@ -153,9 +162,10 @@ def planifier(musique: Musique, moments: list[Moment], fps: int, rythme: str = "
         from copie_style import facteur_rythme
         f = facteur_rythme(profil)
     p = musique.periode
-    n_pre = _beats_par_plan(p, 1.4 * f)
+    edit = style == "edit"         # edits TikTok : coupes plus serrées (~1-1,5 s), drop plus court
+    n_pre = _beats_par_plan(p, (1.0 if edit else 1.4) * f)
     n_post = _beats_par_plan(p, 0.7 * f)
-    n_drop = _beats_par_plan(p, 2.2, (2, 4, 8))
+    n_drop = _beats_par_plan(p, 1.6 if edit else 2.2, (2, 4, 8))
 
     beats = musique.beats
     accents = musique.accents if musique.accents is not None else [0.5] * len(beats)
@@ -207,16 +217,23 @@ def planifier(musique: Musique, moments: list[Moment], fps: int, rythme: str = "
     if len(bornes) - 1 >= i_drop + 3 and bornes[-1] - bornes[-2] <= n_post and len(bornes) - 2 != seq_fin:
         bornes.pop(-2)
 
-    # Hook d'intro : 2 beats de teaser sur le meilleur kill, puis 1 beat de « rewind » (retour en
-    # arrière accéléré), et le montage commence. Il faut de la place avant l'approche du drop.
+    # Hook d'intro : 2 beats de teaser sur le meilleur kill, puis la transition, et le montage
+    # commence. Transition : 1 beat de « rewind » (retour en arrière accéléré), ou l'intro 3D (le clip
+    # devient une carte parmi les autres, ~1,2-1,6 s en beats entiers). Il faut de la place avant
+    # l'approche du drop.
     i_hook = None
-    if hook and i_drop >= 1 and bornes[i_drop - 1] >= 3:
-        val_drop = bornes[i_drop]
-        val_seq = bornes[i_seq] if i_seq is not None else None
-        bornes = [0, 2, 3] + [b for b in bornes if b > 3]
-        i_drop = bornes.index(val_drop)
-        i_seq = bornes.index(val_seq) if val_seq is not None else None
-        i_hook = 0
+    role_transition = "rewind"
+    if hook and i_drop >= 1:
+        n_tr = 1
+        if intro_3d and bornes[i_drop - 1] >= 2 + beats_intro_3d(p):
+            n_tr, role_transition = beats_intro_3d(p), "intro3d"
+        if bornes[i_drop - 1] >= 2 + n_tr:
+            val_drop = bornes[i_drop]
+            val_seq = bornes[i_seq] if i_seq is not None else None
+            bornes = [0, 2, 2 + n_tr] + [b for b in bornes if b > 2 + n_tr]
+            i_drop = bornes.index(val_drop)
+            i_seq = bornes.index(val_seq) if val_seq is not None else None
+            i_hook = 0
 
     nb = len(bornes) - 1
     roles = []
@@ -224,7 +241,7 @@ def planifier(musique: Musique, moments: list[Moment], fps: int, rythme: str = "
         if i_hook is not None and k == 0:
             roles.append("hook")
         elif i_hook is not None and k == 1:
-            roles.append("rewind")
+            roles.append(role_transition)
         elif k == i_drop:
             roles.append("drop")
         elif k == i_seq:
@@ -268,6 +285,7 @@ def planifier(musique: Musique, moments: list[Moment], fps: int, rythme: str = "
         if attribution[k] is None:
             attribution[k] = attribution[i_drop]
     _eviter_repetitions(attribution, roles)
+    _limiter_clips(attribution, roles, moments)
 
     # Les coups les plus forts (après le drop) deviennent des « impacts ».
     seuil_impact = sorted((force[k] for k in apres), reverse=True)[max(0, len(apres) // 3 - 1)] if apres else 9
@@ -280,7 +298,8 @@ def planifier(musique: Musique, moments: list[Moment], fps: int, rythme: str = "
         a, b = bornes[k], bornes[k + 1]
         seg = Segment(index=k, role=roles[k], moment=attribution[k], images=image(b) - image(a),
                       nb_beats=b - a, periode=p, accent=force[k],
-                      impact=roles[k] == "apres" and force[k] >= seuil_impact and force[k] > 0.6)
+                      impact=roles[k] == "apres" and force[k] >= seuil_impact and force[k] > 0.6,
+                      forces_beats=[float(accents[min(i, len(accents) - 1)]) for i in range(a, b)])
         if rythme == "fun":
             seg.impact = False          # pas de ralenti : on garde le moment drôle à vitesse normale
         _choisir_effets(seg, segments[-1] if segments else None, rng, fps)
@@ -292,6 +311,20 @@ def planifier(musique: Musique, moments: list[Moment], fps: int, rythme: str = "
             segments[-1].sortie = None
         segments.append(seg)
     segments[-1].effets.append("fondu_fin")
+    if style == "edit":
+        # Ouverture : de l'action dès la 1re image. Le hook (un kill) démarre net ; sinon fondu très court.
+        if segments[0].role == "hook":
+            segments[0].effets = [e for e in segments[0].effets if e != "fondu_noir"]
+        elif "fondu_noir" not in segments[0].effets:
+            segments[0].effets.append("fondu_noir")
+        # Plans « vibe » : 1 plan de montée sur 2 (2 max) montre le déplacement AVANT le kill, sans le
+        # kill, pour aérer comme dans les edits (le rythme suit la musique, pas que les kills).
+        montee = [s for s in segments if s.role == "montee"]
+        candidats = [s for s in montee if s.index > 0 and segments[s.index - 1].role not in ("intro3d", "rewind")]
+        for s in candidats[::2][:2]:
+            if len(montee) >= 2 and s.moment.t - 0.45 >= 0.6 * s.images_totales / fps:
+                s.vibe = True
+                s.effets = ["monte"] + [e for e in s.effets if e == "pulse"]
 
     for seg in segments:
         _calculer_morceaux(seg, p, fps, ralenti, gel and rythme != "fun")
@@ -309,8 +342,57 @@ def planifier(musique: Musique, moments: list[Moment], fps: int, rythme: str = "
             if seg.role in ("drop", "hook") or seg.impact or t in ("ACE", "CLUTCH", "ONE TAP"):
                 seg.texte = t
 
+    _refuser_images_sales(segments, moments, p, fps, ralenti)
+    if style == "edit":
+        _refuser_plans_morts(segments, moments, p, fps, ralenti)
+        # Edit : le texte de kill est réservé au drop (et à la fin d'une séquence), en petit.
+        for seg in segments:
+            if seg.role not in ("drop",) and not seg.moment.etiquette.startswith(("@", "Mort")):
+                seg.texte = ""
+            if seg.kills_sortie:
+                t, texte = seg.kills_sortie[-1]
+                court = texte if len(texte) <= 7 else f"{len(seg.kills_sortie)}K"
+                seg.kills_sortie = [(t, court)]
+
+    if role_transition == "intro3d" and i_hook is not None:
+        segments[1].cartes = _cartes_intro(segments, moments)
+
     duree = image(bornes[-1]) / fps
     return segments, musique.debut + t0, duree
+
+
+def beats_intro_3d(periode: float) -> int:
+    """Durée de l'intro 3D en beats : entre 1,2 et 1,6 s si possible (au plus près de 1,4 s)."""
+    choix = range(1, 9)
+    dans = [n for n in choix if 1.2 <= n * periode <= 1.6]
+    return min(dans or choix, key=lambda n: abs(n * periode - 1.4))
+
+
+def _cartes_intro(segments: list[Segment], moments: list[Moment], nombre: int = 18) -> list:
+    """Cartes du nuage de l'intro 3D : le kill de chacun des autres plans du montage, puis d'autres
+    kills des clips du dossier (un par clip d'abord) pour en avoir assez. Le hook (déjà à l'écran)
+    et le plan qui suit l'intro (la carte cible, rendue à part) n'en font pas partie."""
+    exclus = {(segments[0].moment.clip, round(segments[0].moment.t, 1))}
+    if len(segments) > 2:
+        exclus.add((segments[2].moment.clip, round(segments[2].moment.t, 1)))
+    res, vus = [], set(exclus)
+
+    def ajouter(m):
+        cle = (m.clip, round(m.t, 1))
+        if cle not in vus and len(res) < nombre:
+            vus.add(cle)
+            res.append((m.clip, max(0.0, m.t)))
+
+    for s in segments[3:]:
+        ajouter(s.moment)
+    clips_vus = {c for c, _ in res}
+    for m in sorted(moments, key=lambda m: m.score, reverse=True):
+        if m.clip not in clips_vus:
+            clips_vus.add(m.clip)
+            ajouter(m)
+    for m in sorted(moments, key=lambda m: m.score, reverse=True):
+        ajouter(m)
+    return res
 
 
 def _varier(moments: list[Moment], besoin: int, max_par_clip: int = 2) -> list[Moment]:
@@ -339,9 +421,108 @@ def texte_kill(etiquette: str) -> str:
     return ""
 
 
+def _limiter_clips(attribution: list, roles: list[str], moments: list[Moment], maximum: int = 2) -> None:
+    """Un même clip au plus `maximum` fois dans le montage (hook, approche et drop comptent ; l'intro 3D
+    et le rewind non, ce sont des transitions). On garde d'abord drop, hook et séquence ; l'approche,
+    la montée puis l'après cèdent leur place à un kill d'un clip moins utilisé."""
+    compte_roles = [k for k in range(len(roles)) if roles[k] not in ("intro3d", "rewind")]
+    priorite = {"drop": 0, "hook": 1, "sequence": 2, "apres": 3, "montee": 4, "approche": 5}
+
+    def usages():
+        u = {}
+        for k in compte_roles:
+            u[attribution[k].clip] = u.get(attribution[k].clip, 0) + 1
+        return u
+
+    deja = {(attribution[k].clip, round(attribution[k].t, 1)) for k in compte_roles}
+    for k in sorted(compte_roles, key=lambda k: -priorite.get(roles[k], 3)):
+        u = usages()
+        if u.get(attribution[k].clip, 0) <= maximum:
+            continue
+        voisins = {attribution[j].clip for j in (k - 1, k + 1) if 0 <= j < len(roles)}
+        candidats = [m for m in moments if u.get(m.clip, 0) < maximum and m.clip not in voisins
+                     and (m.clip, round(m.t, 1)) not in deja]
+        if roles[k] == "approche":       # il faut de la vidéo avant le kill (la course vers l'action)
+            candidats = [m for m in candidats if m.t >= 2.0]
+        if not candidats:
+            continue
+        m = max(candidats, key=lambda m: (-u.get(m.clip, 0), m.score))
+        attribution[k] = m
+        deja.add((m.clip, round(m.t, 1)))
+
+
+def _refuser_images_sales(segments: list[Segment], moments: list[Moment], periode: float, fps: int,
+                          ralenti: float) -> None:
+    """Remplace les plans (fenêtre + 0,5 s : la transition et la marge du rendu lisent plus loin) qui montrent un menu (TAB, achat), une image unie ou brûlée par le meilleur
+    autre moment propre d'un clip pas encore utilisé (au plus 6 essais par plan)."""
+    try:
+        from mouvement import image_propre
+    except Exception:
+        return
+    utilises = {s.moment.clip for s in segments}
+    for seg in segments:
+        if seg.role in ("intro3d", "rewind") or not seg.morceaux:
+            continue
+        debut = min(mo.debut for mo in seg.morceaux)
+        fin = max(mo.debut + mo.duree_source(fps) for mo in seg.morceaux)
+        if image_propre(seg.moment.clip, debut, fin - debut + 0.5):
+            continue
+        origine, texte = seg.moment, seg.texte
+        gel = any(getattr(mo, "gel", False) for mo in seg.morceaux)
+        essais = [m for m in moments if m.clip not in utilises and (seg.role != "approche" or m.t >= 2.0)]
+        for m in sorted(essais, key=lambda m: m.score, reverse=True)[:6]:
+            seg.moment = m
+            _calculer_morceaux(seg, periode, fps, ralenti, gel)
+            debut = min(mo.debut for mo in seg.morceaux)
+            fin = max(mo.debut + mo.duree_source(fps) for mo in seg.morceaux)
+            if image_propre(m.clip, debut, fin - debut + 0.5):
+                utilises.add(m.clip)
+                if texte:
+                    seg.texte = texte_kill(m.etiquette)
+                break
+        else:
+            seg.moment = origine
+            _calculer_morceaux(seg, periode, fps, ralenti, gel)
+
+
+def _refuser_plans_morts(segments: list[Segment], moments: list[Moment], periode: float, fps: int,
+                         ralenti: float) -> None:
+    """Plans sans kill (vibe, approche) : la caméra doit bouger et l'image ne pas être sombre.
+    Vibe mort : on remet le kill. Approche morte : on essaie d'autres clips, sinon on garde."""
+    try:
+        from mouvement import activite
+    except Exception:
+        return
+    vivant = lambda mv, lum: mv >= 0.008 and lum >= 0.22
+    utilises = {s.moment.clip for s in segments}
+    for seg in segments:
+        if not (seg.vibe or seg.role == "approche") or not seg.morceaux:
+            continue
+        mo = seg.morceaux[0]
+        if vivant(*activite(seg.moment.clip, mo.debut, mo.duree_source(fps))):
+            continue
+        if seg.vibe:
+            seg.vibe = False
+            seg.effets = ["pulse"]
+            _calculer_morceaux(seg, periode, fps, ralenti)
+            continue
+        origine = seg.moment
+        for m in sorted((m for m in moments if m.clip not in utilises and m.t >= 2.0),
+                        key=lambda m: m.score, reverse=True)[:4]:
+            seg.moment = m
+            _calculer_morceaux(seg, periode, fps, ralenti)
+            mo = seg.morceaux[0]
+            if vivant(*activite(m.clip, mo.debut, mo.duree_source(fps))):
+                utilises.add(m.clip)
+                break
+        else:
+            seg.moment = origine
+            _calculer_morceaux(seg, periode, fps, ralenti)
+
+
 def _eviter_repetitions(attribution: list, roles: list[str]) -> None:
     """Évite deux plans de suite du même clip (sauf approche → drop, voulu)."""
-    fixes = ("drop", "approche", "sequence", "hook", "rewind")     # l'approche et le drop partagent volontairement le même clip
+    fixes = ("drop", "approche", "sequence", "hook", "rewind", "intro3d")     # l'approche et le drop partagent volontairement le même clip
     n = len(attribution)
 
     def clip_de(i):
@@ -374,13 +555,17 @@ def _choisir_effets(seg: Segment, prec: Segment | None, rng: random.Random, fps:
     if seg.role == "rewind":
         seg.effets = ["rewind"]
         return
+    if seg.role == "intro3d":
+        seg.effets = ["intro3d"]     # tout est fait par intro_3d.py (pas d'effet FFmpeg)
+        return
     if prec is None:
         seg.effets = ["fondu_noir", "pulse"]
         return
-    if prec.role == "rewind" and seg.role in ("montee", "approche"):
-        # Après le rewind : coupe franche avec flash, le « vrai » montage commence.
+    if prec.role in ("rewind", "intro3d") and seg.role in ("montee", "approche"):
+        # Après le rewind : coupe franche avec flash, le « vrai » montage commence. Après l'intro 3D :
+        # coupe nette, la caméra vient de plonger dans ce plan (sa 1re image remplit l'écran).
         seg.effets = ["pulse"] + (["monte"] if seg.role == "approche" else [])
-        seg.entree = "flash"
+        seg.entree = "flash" if prec.role == "rewind" else None
         return
     if seg.role == "drop":
         # Coupe sèche pile sur le kill, au moment du drop.
@@ -439,7 +624,7 @@ def _choisir_effets(seg: Segment, prec: Segment | None, rng: random.Random, fps:
 
 def _appliquer_style(seg: Segment, prec: Segment | None, style: str, rng: random.Random) -> None:
     regles = STYLES.get(style) or {}
-    if not regles or seg.role in ("hook", "rewind"):
+    if not regles or seg.role in ("hook", "rewind", "intro3d"):
         return
     interdits = regles.get("effets_interdits", set())
     garder = [e for e in seg.effets if e not in interdits]
@@ -457,10 +642,29 @@ def _appliquer_style(seg: Segment, prec: Segment | None, style: str, rng: random
             prec.sortie = nouveau if nouveau in SORTIES else None
     if style == "cinematique" and seg.transition in ("pixelize", "radial", "hblur"):
         seg.transition = rng.choice(["fade", "dissolve", "fadewhite"])
+    if style == "edit" and seg.transition and seg.transition not in TRANSITIONS_EDIT:
+        seg.transition = rng.choice([t for t in TRANSITIONS_EDIT if t != (prec.transition if prec else None)])
 
 
 def _caler(debut: float, duree_src: float, duree_clip: float) -> float:
     return max(0.0, min(debut, duree_clip - duree_src - 0.05))
+
+
+def _rampe(m: Moment, rampe: list, images: int, fps: int, img_kill: int | None,
+           debut_force: float | None = None) -> tuple[Morceau, float | None] | None:
+    """Morceau en speed ramp lissé. Le kill (instant m.t) tombe pile sur l'image img_kill.
+    Retourne (morceau, temps du kill à l'écran) ou None si le clip est trop court."""
+    from mouvement import temps_source, vers_sortie
+    src = temps_source(rampe, images, fps)
+    if debut_force is not None:
+        debut = debut_force
+    else:
+        debut = m.t - float(src[img_kill])
+    if debut < 0 or debut + float(src[-1]) > m.duree_clip - 0.05:
+        return None
+    vm = float(src[-1]) / (images / fps)
+    t_kill = vers_sortie(rampe, images, fps, m.t - debut) if m.t >= debut else None
+    return Morceau(debut, vm, images, rampe=rampe), t_kill
 
 
 def _calculer_morceaux(seg: Segment, periode: float, fps: int, ralenti: float, gel: bool = False) -> None:
@@ -481,9 +685,17 @@ def _calculer_morceaux(seg: Segment, periode: float, fps: int, ralenti: float, g
         if debut + src_lent + img_reel / fps > m.duree_clip - 0.05:
             debut = max(0.0, m.duree_clip - 0.05 - src_lent - img_reel / fps)
         seg.morceaux = [Morceau(m.t + 0.02, 1.0, img_gel, gel=True)]
+        r = None
         if img_lent:
-            seg.morceaux.append(Morceau(debut, ralenti, img_lent))
-        seg.morceaux.append(Morceau(debut + src_lent, 1.0, img_reel))
+            u = img_lent / reste
+            r = _rampe(m, [(0, ralenti), (u * 0.75, ralenti), (min(0.95, u + 0.12), 1.0), (1, 1.08)],
+                       reste, fps, None, debut_force=m.t + 0.02)
+        if r is not None:
+            seg.morceaux.append(r[0])
+        else:
+            if img_lent:
+                seg.morceaux.append(Morceau(debut, ralenti, img_lent))
+            seg.morceaux.append(Morceau(debut + src_lent, 1.0, img_reel))
         seg.t_kill = 0.0
         seg.effets.append("gel")
         return
@@ -501,6 +713,13 @@ def _calculer_morceaux(seg: Segment, periode: float, fps: int, ralenti: float, g
         seg.morceaux = [Morceau(debut, ralenti, img_lent)] if img_lent else []
         seg.morceaux.append(Morceau(debut + src_lent, 1.0, img_reel))
         seg.t_kill = (m.t - debut) / (ralenti if img_lent else 1.0)
+        if img_lent:
+            # Speed ramp lissé : ralenti sur le kill, puis la vitesse remonte en douceur.
+            u = img_lent / total
+            r = _rampe(m, [(0, ralenti), (u * 0.7, ralenti), (min(0.95, u + 0.15), 1.0), (1, 1.08)],
+                       total, fps, None, debut_force=debut)
+            if r is not None and r[1] is not None:
+                seg.morceaux, seg.t_kill = [r[0]], r[1]
         return
 
     if seg.role == "hook":
@@ -510,10 +729,18 @@ def _calculer_morceaux(seg: Segment, periode: float, fps: int, ralenti: float, g
         debut = max(0.0, m.t - img_avant / fps)
         seg.morceaux = [Morceau(debut, 1.0, img_avant), Morceau(debut + img_avant / fps, lent, img_lent)]
         seg.t_kill = (m.t - debut) if m.t - debut <= img_avant / fps else img_avant / fps
+        if img_lent > 2 and img_avant > 2:
+            # Ralenti progressif vers le kill, puis ralenti tenu.
+            u = img_avant / total
+            r = _rampe(m, [(0, 1.1), (max(0.0, u - 0.18), 1.0), (u + 0.02, lent), (1, lent)],
+                       total, fps, img_avant)
+            if r is not None:
+                seg.morceaux, seg.t_kill = [r[0]], r[1]
         return
 
-    if seg.role == "rewind":
-        # On repart en arrière depuis le kill du hook, en accéléré.
+    if seg.role in ("rewind", "intro3d"):
+        # On repart en arrière depuis le kill du hook, en accéléré. (Intro 3D : ces morceaux ne servent
+        # que si son rendu échoue, le plan redevient alors un rewind.)
         fin = min(m.duree_clip - 0.05, m.t + 0.3)
         debut = max(0.0, fin - 2.6)
         seg.morceaux = [Morceau(debut, max(1.0, (fin - debut) / duree), total, inverse=True)]
@@ -537,6 +764,15 @@ def _calculer_morceaux(seg: Segment, periode: float, fps: int, ralenti: float, g
             textes.append(((t - debut) / v, "1" if i == 0 else texte_kill(nom) or nom.upper()))
         seg.kills_sortie = textes
         seg.t_kill = textes[-1][0]
+        return
+
+    if seg.vibe:
+        # Plan « vibe » : le déplacement juste AVANT le kill, sans le montrer.
+        fin = m.t - 0.45
+        vitesse = 1.0 if fin >= duree else max(0.6, fin / duree)
+        debut = max(0.0, fin - duree * vitesse)
+        seg.morceaux = [Morceau(debut, vitesse, total)]
+        seg.t_kill = None
         return
 
     if seg.role == "approche":
@@ -563,10 +799,27 @@ def _calculer_morceaux(seg: Segment, periode: float, fps: int, ralenti: float, g
         t_k = max(t_k, img_reel / fps)
         seg.morceaux = [Morceau(t_k - img_reel / fps, 1.0, img_reel), Morceau(t_k, ralenti, img_lent)]
         seg.t_kill = img_reel / fps + (m.t - t_k) / ralenti
+        # Speed ramp : léger élan, ralenti qui s'installe sur le kill, puis ré-accélération.
+        u = img_reel / total
+        d = lambda sec: sec / duree
+        r = _rampe(m, [(0, 1.15), (max(0.0, u - d(0.12)), 1.0), (u + d(0.04), ralenti),
+                       (min(0.9, u + d(0.04) + d(0.35)), ralenti), (1, 1.2)], total, fps, img_reel)
+        if r is not None:
+            seg.morceaux, seg.t_kill = [r[0]], r[1]
         return
 
     if "velocity" in seg.effets and t_kill_sortie >= 0.3 and duree - t_kill_sortie >= 0.45:
         rapide, lent, d_lent = 1.7, 0.35, 0.3
+        # Version lissée : accéléré qui freine pile sur le kill, ralenti, puis retour à la normale.
+        img_k = int(round(t_kill_sortie * fps))
+        d = lambda sec: sec / duree
+        uk = img_k / total
+        r = _rampe(m, [(0, 1.8), (max(0.0, uk - d(0.14)), 1.6), (uk + d(0.02), lent),
+                       (min(0.95, uk + d(d_lent)), lent), (min(1.0, uk + d(d_lent + 0.15)), 1.0), (1, 1.0)],
+                   total, fps, img_k)
+        if r is not None:
+            seg.morceaux, seg.t_kill = [r[0]], r[1]
+            return
         img_a = int(round(t_kill_sortie * fps))
         img_b = int(round(d_lent * fps))
         img_c = total - img_a - img_b

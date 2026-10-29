@@ -14,4 +14,13 @@ app/clips_amis/
 app/morts.json
 app/voix_fortes.json
 *.log
-cle_privee*.txt
+cle_privee*
+codes_pro*
+patreon-saison*
+app/licence.txt
+app/paroles_cache/
+app/webview/
+app/logo.png
+app/sessions.log
+*.lrc
+app/modeles/

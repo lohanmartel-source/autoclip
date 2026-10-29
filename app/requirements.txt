@@ -4,3 +4,5 @@ scipy
 soundfile
 edge-tts
 pywebview>=5.0
+# Whisper local : synchro des paroles mot à mot + sous-titres du micro (modèle téléchargé à la 1re utilisation)
+faster-whisper==1.2.1

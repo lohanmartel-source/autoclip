@@ -232,6 +232,11 @@ class Tache:
                 self.etape = f"Rendu des plans ({m.group(1)}/{m.group(2)})"
             if "assemblage final" in msg:
                 self.progression, self.etape = 0.88, "Assemblage final"
+            m = re.search(r"modèle IA (\d+) %", msg)
+            if m:
+                self.etape = f"Téléchargement du modèle IA des paroles ({m.group(1)} %)"
+            elif "synchro IA" in msg or "modèle de synchro IA" in msg:
+                self.etape = "Paroles : synchro IA"
 
     def lancer(self, travail) -> bool:
         """travail : Options d'un montage, ou une fonction(log) qui renvoie la liste des vidéos."""
@@ -751,7 +756,8 @@ class Gestionnaire(BaseHTTPRequestHandler):
         cadrage = d.get("cadrage") if d.get("cadrage") in ("flou", "crop", "ecran_partage") else "flou"
         apercu = bool(d.get("apercu"))
         format_ = "youtube" if d.get("format") == "youtube" else "vertical"
-        style = d.get("style") if d.get("style") in ("auto", "phonk", "cinematique", "clean") else "auto"
+        style = d.get("style") if d.get("style") in ("auto", "edit", "phonk", "cinematique", "clean") else "edit"
+        look = d.get("look") if d.get("look") in ("auto", "neon", "glace", "chaud", "aucun") else "auto"
         horodatage = time.strftime("%Y-%m-%d_%H-%M-%S")
         prefixe = "youtube" if format_ == "youtube" else "autoclip"
         sortie = Path(self.config["dossier_sortie"]) / f"{prefixe}_{horodatage}{'_apercu' if apercu else ''}.mp4"
@@ -782,8 +788,9 @@ class Gestionnaire(BaseHTTPRequestHandler):
                     apercu=apercu, filtre=filtre, jeux=jeux, textes_kills=bool(d.get("textes", True)),
                     sequences=bool(d.get("sequences", True)),
                     versions=3 if str(d.get("versions")) == "3" else 1, hook=bool(d.get("hook", True)),
+                    intro_3d=bool(d.get("intro_3d", True)),
                     reactions=bool(d.get("voix", True)), sous_titres=bool(d.get("sous_titres", True)),
-                    format=format_, style=style, compteur=bool(d.get("compteur", True)),
+                    format=format_, style=style, look=look, compteur=bool(d.get("compteur", True)),
                     outro=self.config.get("pseudo", "") if d.get("outro", True) else "",
                     effets_sonores=bool(d.get("effets_sonores", True)), armes=liste("armes"), agents=liste("agents"),
                     selection=selection, drop=drop, depuis_ts=depuis_ts, jusqu_a_ts=jusqu_a_ts,
@@ -792,7 +799,9 @@ class Gestionnaire(BaseHTTPRequestHandler):
                     instrumental=bool(d.get("instrumental", True)), arret_image=bool(d.get("arret_image", True)),
                     profil=str(d.get("profil") or "")[:40],
                     langue_sous_titres="en" if d.get("langue_sous_titres") == "en" else "fr",
-                    filigrane=("@" + self.config["pseudo"]) if d.get("filigrane") and self.config.get("pseudo") else "")
+                    filigrane=("@" + self.config["pseudo"]) if d.get("filigrane") and self.config.get("pseudo") else "",
+                    paroles=bool(d.get("paroles", False)), titre_chanson=str(d.get("titre_chanson") or "").strip()[:120],
+                    decalage_paroles=nombre("decalage_paroles", 0, -0.5, 0.5, float))
         if not licence.est_pro():
             pro = licence.fonctions_pro_demandees(o)
             if pro:
@@ -809,9 +818,9 @@ class Gestionnaire(BaseHTTPRequestHandler):
         if not selection:   # un montage « à la main » ne change pas les réglages habituels
             self.config["reglages"] = {k: d.get(k) for k in (
                 "musique", "duree", "cadrage", "rythme", "filtre", "jeux", "textes", "sequences", "versions", "hook",
-                "voix", "sous_titres", "son_jeu", "ralenti", "derniers", "texte", "fps", "apercu", "format", "style",
+                "intro_3d", "voix", "sous_titres", "son_jeu", "ralenti", "derniers", "texte", "fps", "apercu", "format", "style", "look",
                 "compteur", "outro", "effets_sonores", "armes", "agents", "mode", "langue_sous_titres", "filigrane",
-                "caster", "instrumental", "arret_image", "profil")}
+                "caster", "instrumental", "arret_image", "profil", "paroles", "titre_chanson", "decalage_paroles")}
         sauver_config(self.config)
         self._json({"ok": True})
 

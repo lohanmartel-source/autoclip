@@ -30,14 +30,14 @@ def titres(segments: list, o, combien: int = 3) -> list[str]:
 
 
 def legende(segments: list, o, graine: int = 0) -> str:
-    moments = [s.moment for s in segments if s.role not in ("hook", "rewind", "approche")]
+    moments = [s.moment for s in segments if s.role not in ("hook", "rewind", "intro3d", "approche")]
     if not moments:
         return ""
     rng = random.Random(len(moments) * 31 + int(sum(m.t for m in moments)) + 7777 * graine)
     etiquettes = " ".join(m.etiquette.lower() for m in moments)
     sequence = next((s.moment for s in segments if s.role == "sequence" and s.moment.kills), None)
     nb_kills = sum(len(s.kills_sortie) if s.kills_sortie else (1 if s.t_kill is not None else 0)
-                   for s in segments if s.role not in ("hook", "rewind", "approche"))
+                   for s in segments if s.role not in ("hook", "rewind", "intro3d", "approche"))
     agents = Counter(m.agent for m in moments if getattr(m, "agent", ""))
     armes = Counter(m.arme for m in moments if getattr(m, "arme", ""))
     agent = agents.most_common(1)[0][0] if agents else ""

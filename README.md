@@ -15,6 +15,14 @@ de données de Medal, donc chaque plan est un vrai kill.
 Tes données (réglages, index des kills, styles) sont dans `%APPDATA%\AutoClip`.
 Tes montages vont dans `Vidéos\AutoClip`, tes musiques dans `Musique\AutoClip`.
 
+### Nouveautés 1.3.0
+- **Style « Edit »** (par défaut) : flou de mouvement réel, speed ramps lissées, effets de beat dosés,
+  plans « vibe », fondu d'ouverture, 60 fps fluide (Pro).
+- **Looks d'étalonnage** : Auto (couleur de tes skins), Néon, Glace, Chaud, avec glow et vignette.
+- **Intro 3D** : l'image du kill se fige, la caméra recule au milieu de tes clips, puis plonge dans le montage.
+- **Paroles dans le décor** : chaque mot de la chanson en énorme, au moment où il est chanté, derrière ton arme.
+  Paroles trouvées sur LRCLIB (renseigne « Artiste - Titre ») ou dans un fichier `.lrc` à côté de la musique.
+
 ## Structure du projet
 
 | Dossier | Contenu |

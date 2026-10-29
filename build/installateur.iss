@@ -1,7 +1,7 @@
 ; Inno Setup 6 : construit AutoClip-Setup-<version>.exe à partir de dist\AutoClip (PyInstaller) et ffmpeg\.
 ; Lancer : iscc installateur.iss   (build.bat le fait pour toi)
 #ifndef Version
-  #define Version "1.2.0"
+  #define Version "1.3.0"
 #endif
 
 [Setup]

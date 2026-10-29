@@ -53,7 +53,7 @@ def options_reglages(c: dict, **forces):
                 fps=60 if str(reg.get("fps")) == "60" else 30,
                 hook=reg.get("hook", True) is not False, reactions=reg.get("voix", True) is not False,
                 sous_titres=reg.get("sous_titres", True) is not False,
-                style=reg.get("style") or "auto", compteur=reg.get("compteur", True) is not False,
+                style=reg.get("style") or "auto", look=reg.get("look") or "auto", compteur=reg.get("compteur", True) is not False,
                 outro=str(c.get("pseudo") or "") if reg.get("outro", True) is not False else "",
                 effets_sonores=reg.get("effets_sonores", True) is not False)
     base.update(forces)

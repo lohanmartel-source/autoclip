@@ -63,7 +63,7 @@ def evenements(segments, debuts: list[float], langue: str, graine: int = 0) -> l
     rng = random.Random(graine)
     res, dernier = [], -9.0
     for s, d in zip(segments, debuts):
-        if s.role in ("hook", "rewind", "montee", "approche") or s.t_kill is None:
+        if s.role in ("hook", "rewind", "intro3d", "montee", "approche") or s.t_kill is None:
             continue
         gros = s.role in ("drop", "sequence") or s.texte in ("ACE", "4K", "ONE TAP", "CLUTCH")
         if not gros:

@@ -60,6 +60,7 @@ class Options:
     sequences: bool = True        # multi-kills rapides montrés en entier
     versions: int = 1             # nombre de montages différents à produire
     hook: bool = True             # teaser du meilleur kill + rewind au début
+    intro_3d: bool = True         # après le teaser : le clip devient une carte en 3D (au lieu du rewind)
     reactions: bool = True        # ta voix (micro) après les kills
     sous_titres: bool = True      # sous-titres de ta voix (Whisper)
     miniature: bool = True        # image de couverture .jpg à côté de la vidéo
@@ -67,8 +68,9 @@ class Options:
     depuis_ts: float | None = None   # seulement les clips à partir de cette date (timestamp)
     jusqu_a_ts: float | None = None  # … et jusqu'à cette date (ex. une session de jeu)
     format: str = "vertical"         # vertical (TikTok/Shorts) ou youtube (16:9 long, duree = 120-180 s)
-    style: str = "auto"              # auto / phonk / cinematique / clean
-    compteur: bool = True            # « KILLS 14 » à l'écran
+    style: str = "auto"              # auto / edit / phonk / cinematique / clean
+    look: str = "auto"               # étalonnage du montage : auto / neon / glace / chaud / aucun (look.py)
+    compteur: bool = True           # « KILLS 14 » à l'écran
     outro: str = ""                  # ton pseudo affiché à la fin (vide = pas d'outro)
     effets_sonores: bool = True      # whoosh, boom, riser, rewind
     legende: bool = True             # légende + hashtags (.txt) à côté de la vidéo
@@ -86,6 +88,11 @@ class Options:
     arret_image: bool = True         # arrêt sur image + contour de l'ennemi au drop
     profil: str = ""                 # style copié d'une vidéo (nom du profil, voir styles_copies/)
     marque: bool = False             # « Fait avec AutoClip » sur la vidéo (version gratuite)
+    paroles: bool = False            # paroles mot à mot dans le décor, derrière l'arme (.lrc, LRCLIB ou Whisper)
+    titre_chanson: str = ""          # « Artiste - Titre » pour trouver les paroles (sinon tags / nom du fichier)
+    lrc: str = ""                    # fichier .lrc ou texte LRC collé (prioritaire)
+    couleur_paroles: str = ""        # couleur des paroles (#rrggbb) ; vide = couleur dominante du montage
+    decalage_paroles: float = 0.0    # réglage fin manuel des paroles, en secondes (-0,5 à +0,5 ; + = plus tard)
 
 
 def lister_clips(sources: list[str], derniers: int = 0) -> list[Path]:
@@ -303,7 +310,8 @@ def _rendu_de(o: Options) -> Rendu:
     return Rendu(largeur=pair(W), hauteur=pair(H), fps=o.fps, cadrage=o.cadrage,
                  qualite="apercu" if o.apercu else "finale", police=trouver_police(),
                  textes_kills=o.textes_kills, style=o.style, filigrane=o.filigrane,
-                 caster=o.caster, instrumental=o.instrumental, gel=o.arret_image, marque=o.marque)
+                 caster=o.caster, instrumental=o.instrumental, gel=o.arret_image, marque=o.marque,
+                 look=o.look)
 
 
 def _afficher_plan(segments, duree, chanson, rythme, fps, log):
@@ -336,6 +344,12 @@ def _rendre(o: Options, r: Rendu, segments, musique, debut_musique, duree, sorti
         assembler(segments, fichiers, musique.chemin, debut_musique, duree, sortie_v, r,
                   o.son_jeu, texte, r.police, fichier_texte, reactions=reactions, dossier_temp=temp,
                   compteur_depart=compteur_depart, outro=outro, effets_sonores=o.effets_sonores)
+        if o.paroles:
+            from paroles import appliquer as paroles_dans_le_decor
+            paroles_dans_le_decor(sortie_v, musique.chemin, debut_musique, duree, cadrage=r.cadrage,
+                                  chanson=o.titre_chanson if Path(o.musique).is_file() else "",
+                                  lrc=o.lrc, couleur=o.couleur_paroles or getattr(r, "accent", "") or "", segments=segments, fps=o.fps,
+                                  qualite=r.qualite, log=log, decalage=o.decalage_paroles)
         if o.miniature:
             if miniatures(segments, r, sortie_v, texte, temp):
                 log(f"  3 miniatures au choix : {sortie_v.stem}_mini1..3.jpg")
@@ -349,7 +363,7 @@ def _rendre(o: Options, r: Rendu, segments, musique, debut_musique, duree, sorti
 def noter(segments) -> float:
     """Note sur 10 d'un montage, comme un monteur le jugerait : la force des kills (surtout au drop
     et sur les coups forts), un multi-kill en entier, la variété des clips et des transitions."""
-    plans = [s for s in segments if s.role not in ("hook", "rewind", "approche")]
+    plans = [s for s in segments if s.role not in ("hook", "rewind", "intro3d", "approche")]
     if not plans:
         return 0.0
     force = sum(s.moment.score - 10 for s in plans) / len(plans)          # 0 à ~5
@@ -358,7 +372,7 @@ def noter(segments) -> float:
     sequence = 1.0 if any(s.role == "sequence" for s in segments) else 0.0
     variete = len({s.moment.clip for s in plans}) / len(plans)
     transitions = len({s.entree or s.transition for s in plans}) / max(1, len(plans))
-    note = (3.0 * min(1.0, force / 4.5) + 1.5 * min(1.0, drop / 4.5) + 1.5 * sur_coups_forts
+    note = (3.0 * min(1.0, max(0.0, force / 4.5)) + 1.5 * min(1.0, max(0.0, drop / 4.5)) + 1.5 * sur_coups_forts
             + 1.0 * sequence + 2.0 * variete + 1.0 * min(1.0, transitions * 1.5))
     return round(min(10.0, note), 1)
 
@@ -385,11 +399,15 @@ def generer(o: Options, log=print, plan_seulement: bool = False) -> list[Path]:
     debut_chrono = time.time()
     verifier_ffmpeg()
     o = licence.appliquer(o)            # version gratuite : Valorant, vertical, 1 version, 30 i/s, marque
+    if o.paroles:
+        # Paroles dans le décor : pas de textes de kill, de compteur ni de sous-titres du micro en plus
+        # (l'image respire, et deux textes à la fois se lisent mal).
+        o = dc_replace(o, textes_kills=False, compteur=False, sous_titres=False)
     if o.mode == "morts":
         # Coach : plans longs à vitesse normale, le son du jeu bien présent, musique discrète.
         o = dc_replace(o, rythme="fun", hook=False, sequences=False, son_jeu=max(o.son_jeu, 0.8),
                        filtre="tous", format="vertical", ralenti=1.0, style="clean", compteur=False,
-                       caster="", arret_image=False, versions=1)
+                       caster="", arret_image=False, versions=1, look="aucun")
     if o.mode == "fun":
         # Fails et rires : plans longs, pas de teaser, ta voix en avant, plus de son du jeu.
         o = dc_replace(o, rythme="fun", hook=False, sequences=False, reactions=True,
@@ -442,7 +460,8 @@ def generer(o: Options, log=print, plan_seulement: bool = False) -> list[Path]:
         rythme_v = o.rythme if v == 0 or o.mode == "fun" else autres[(v - 1) % len(autres)]
         segments, debut_musique, duree = planifier(musique, moments_v, o.fps, rythme_v, o.ralenti,
                                                    graine0 + 101 * v, sequence=sequence, hook=o.hook,
-                                                   style=o.style, gel=o.arret_image, profil=profil)
+                                                   style=o.style, gel=o.arret_image, profil=profil,
+                                                   intro_3d=o.intro_3d)
         drops_utilises.update(s.moment.clip for s in segments if s.role == "drop")
         if not rendre_celle_ci:
             continue
@@ -504,9 +523,10 @@ def _generer_youtube(o: Options, ctx: dict, r: Rendu, graine0: int, sortie: Path
             segments, debut_musique, duree = planifier(musique, dispo, o.fps, rythmes[c % len(rythmes)], o.ralenti,
                                                        graine0 + 101 * c, sequence=sequence,
                                                        hook=o.hook and c == 0, style=o.style,
-                                                       gel=o.arret_image, profil=profil)
+                                                       gel=o.arret_image, profil=profil,
+                                                       intro_3d=o.intro_3d)
             for s in segments:
-                if s.role not in ("hook", "rewind"):
+                if s.role not in ("hook", "rewind", "intro3d"):
                     utilises.add((s.moment.clip, round(s.moment.t, 1)))
             _afficher_plan(segments, duree, chanson, rythmes[c % len(rythmes)], o.fps, log)
             tous_segments += segments
@@ -599,6 +619,8 @@ def main(argv=None) -> int:
     ap.add_argument("--sans-textes", action="store_true", help="Pas de texte ONE TAP / ACE sur les kills")
     ap.add_argument("--versions", type=int, default=1, help="Nombre de montages différents (ex. 3)")
     ap.add_argument("--sans-hook", action="store_true", help="Pas de teaser + rewind au début")
+    ap.add_argument("--sans-intro-3d", action="store_true",
+                    help="Après le teaser, le rewind classique au lieu de l'intro 3D (cartes de clips)")
     ap.add_argument("--sans-voix", action="store_true", help="Ne pas garder tes réactions au micro")
     ap.add_argument("--sans-sous-titres", action="store_true", help="Pas de sous-titres sur ta voix")
     ap.add_argument("--sans-miniature", action="store_true", help="Pas d'image de couverture")
@@ -607,7 +629,10 @@ def main(argv=None) -> int:
     ap.add_argument("--best-of", action="store_true", help="Best-of de la semaine avec les réglages de l'app")
     ap.add_argument("--format", choices=["vertical", "youtube"], default="vertical",
                     help="vertical = TikTok/Shorts ; youtube = 16:9 long (mets --duree 150)")
-    ap.add_argument("--style", choices=["auto", "phonk", "cinematique", "clean"], default="auto")
+    ap.add_argument("--style", choices=["auto", "edit", "phonk", "cinematique", "clean"], default="auto",
+                    help="edit = façon edits TikTok (flou de mouvement, speed ramps, plans vibe, bloom)")
+    ap.add_argument("--look", choices=["auto", "neon", "glace", "chaud", "aucun"], default=None,
+                    help="Étalonnage du montage (auto = selon la couleur du skin). Défaut : auto en style edit, aucun sinon")
     ap.add_argument("--sans-compteur", action="store_true", help="Pas de compteur KILLS à l'écran")
     ap.add_argument("--outro", default="", help="Ton pseudo affiché à la fin")
     ap.add_argument("--sans-effets-sonores", action="store_true", help="Pas de whoosh / boom")
@@ -619,6 +644,13 @@ def main(argv=None) -> int:
     ap.add_argument("--graine", type=int, default=None, help="Fixe le choix aléatoire des effets")
     ap.add_argument("--plan", action="store_true", help="Affiche le plan du montage sans faire le rendu")
     ap.add_argument("--garder-temp", action="store_true", help=argparse.SUPPRESS)
+    ap.add_argument("--paroles", action="store_true",
+                    help="Paroles mot à mot dans le décor, derrière l'arme (.lrc à côté de la musique, LRCLIB ou Whisper)")
+    ap.add_argument("--titre-chanson", default="", metavar="\"ARTISTE - TITRE\"",
+                    help="Chanson à chercher sur LRCLIB (sinon tags ou nom du fichier)")
+    ap.add_argument("--lrc", default="", metavar="FICHIER", help="Paroles synchronisées (.lrc) à utiliser")
+    ap.add_argument("--decalage-paroles", type=float, default=0.0, metavar="SECONDES",
+                    help="Réglage fin des paroles, de -0.5 à +0.5 s (+ = les mots apparaissent plus tard)")
     a = ap.parse_args(argv)
     if a.best_of:
         import sessions
@@ -636,10 +668,13 @@ def main(argv=None) -> int:
                 derniers=a.derniers, max_par_clip=a.max_par_clip, texte=a.texte, fps=a.fps,
                 apercu=a.apercu, graine=a.graine, garder_temp=a.garder_temp, filtre=a.filtre,
                 jeux=a.jeux, textes_kills=not a.sans_textes, sequences=not a.sans_sequence,
-                versions=max(1, a.versions), hook=not a.sans_hook, reactions=not a.sans_voix,
+                versions=max(1, a.versions), hook=not a.sans_hook, intro_3d=not a.sans_intro_3d,
+                reactions=not a.sans_voix,
                 sous_titres=not a.sans_sous_titres, miniature=not a.sans_miniature, depuis_jours=a.depuis,
-                format=a.format, style=a.style, compteur=not a.sans_compteur, outro=a.outro,
-                effets_sonores=not a.sans_effets_sonores, armes=a.armes, agents=a.agents)
+                format=a.format, style=a.style, look=a.look or ("auto" if a.style == "edit" else "aucun"), compteur=not a.sans_compteur, outro=a.outro,
+                effets_sonores=not a.sans_effets_sonores, armes=a.armes, agents=a.agents,
+                paroles=a.paroles or bool(a.lrc), titre_chanson=a.titre_chanson, lrc=a.lrc,
+                decalage_paroles=max(-0.5, min(0.5, a.decalage_paroles)))
     if a.liste_jeux:
         for jeu, n in jeux_disponibles(a.clips).items():
             print(f"{jeu:30} {n} clip(s)")

@@ -175,5 +175,19 @@ def charger(dossiers: list[Path], log=print) -> dict[str, InfoClip]:
     return resultat
 
 
+_PAR_NOM: dict = {}
+
+
 def info_pour(infos: dict[str, InfoClip], clip: Path) -> InfoClip | None:
-    return infos.get(_normaliser(Path(clip).resolve())) or infos.get(_normaliser(clip))
+    trouve = infos.get(_normaliser(Path(clip).resolve())) or infos.get(_normaliser(clip))
+    if trouve is None and infos:
+        # Dossier Medal déplacé ou copié : on retrouve le clip par son nom de fichier (unique chez Medal).
+        cle = id(infos)
+        if _PAR_NOM.get(cle, (None, None))[0] is not infos:
+            par_nom = {}
+            for k, v in infos.items():
+                par_nom.setdefault(os.path.basename(k.replace("\\", "/")).lower(), v)
+            _PAR_NOM[cle] = (infos, par_nom)
+        par_nom = _PAR_NOM[cle][1]
+        trouve = par_nom.get(Path(clip).name.lower())
+    return trouve
