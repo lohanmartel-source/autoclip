@@ -11,7 +11,7 @@ import os
 import sys
 from pathlib import Path
 
-VERSION = "1.3.0"
+VERSION = "1.4.0"
 NOM = "AutoClip"
 
 INSTALLEE = bool(getattr(sys, "frozen", False))

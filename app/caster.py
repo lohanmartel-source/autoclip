@@ -18,10 +18,14 @@ PHRASES = {
     "en": {"ACE": ["ACE!", "That's an ACE!", "ACE! Unbelievable!"], "4K": ["Four kills!", "QUADRA!"],
            "3K": ["Triple!", "Three down!"], "ONE TAP": ["One tap!", "ONE TAP!", "Headshot!"],
            "CLUTCH": ["CLUTCH!", "What a clutch!"], "KNIFE": ["With the knife!"], "5K": ["ACE!"],
+           "HEADSHOT": ["Headshot!", "Right in the head!"], "VICTORY": ["Victory Royale!"],
+           "CHAMPION": ["You are the champion!"], "SQUAD WIPE": ["Squad wipe!"],
            "": ["What a shot!", "Clean!", "Oh my god!"]},
     "fr": {"ACE": ["ACE !", "C'est un ACE !"], "4K": ["Quatre kills !", "Quadra !"],
            "3K": ["Triplé !", "Et de trois !"], "ONE TAP": ["One tap !", "Une balle !"],
            "CLUTCH": ["Le clutch !", "Quel clutch !"], "KNIFE": ["Au couteau !"], "5K": ["ACE !"],
+           "HEADSHOT": ["Dans la tête !", "Headshot !"], "VICTORY": ["Top 1 !"],
+           "CHAMPION": ["Champion !"], "SQUAD WIPE": ["Toute l'escouade !"],
            "": ["Quel tir !", "Propre !", "Incroyable !"]},
 }
 

@@ -56,6 +56,27 @@ def _normaliser(x, med, haut):
     return np.clip((x - med) / (haut - med + 1e-9), 0, 3)
 
 
+def _mouvement(clip: Path, duree: float, n: int) -> np.ndarray | None:
+    """Jeux sans kills : vitesse de la caméra (0-3, comme le score du son) sur les n mesures du son.
+    None pour les jeux à kills (le son des tirs suffit) ou si la vidéo est illisible."""
+    try:
+        from jeux import profil
+        if profil(clip).kills:
+            return None
+        from mouvement import _decalages
+        d, fps = _decalages(clip, 0.0, duree, w=96, h=54)
+    except Exception:
+        return None
+    if len(d) < 3:
+        return None
+    v = uniform_filter1d(np.hypot(d[:, 0], d[:, 1]), size=max(1, int(0.5 * fps)))
+    haut = np.percentile(v, 95)
+    if haut <= 1e-6:
+        return None
+    v = np.clip(v / haut, 0, 1.5) * 2
+    return np.interp(np.arange(n) / FPS_ANALYSE, np.arange(len(v)) / fps, v)
+
+
 def trouver_moments(clips: list[Path], max_par_clip: int = 3, log=print) -> list[Moment]:
     """Analyse tous les clips et retourne les moments triés du meilleur au moins bon."""
     analyses = []
@@ -91,6 +112,11 @@ def trouver_moments(clips: list[Path], max_par_clip: int = 3, log=print) -> list
         on_n = _normaliser(onset, on_med, on_haut)
         rms_n = _normaliser(rms, rms_med, rms_haut)
         score = uniform_filter1d(0.55 * on_n + 0.45 * rms_n, size=max(1, int(0.35 * FPS_ANALYSE)))
+        mvt = _mouvement(clip, info["duree"], len(score))
+        if mvt is not None:
+            # Jeux sans kills (Minecraft, courses…) : l'action se voit autant qu'elle s'entend
+            # (virage, chute, combat). Le mouvement de la caméra compte pour un tiers du score.
+            score = 0.67 * score + 0.33 * mvt
 
         # Densité de tirs/impacts sur 2,5 s (rafales, multi-kills)
         pics_on, _ = find_peaks(on_n, height=0.8, distance=max(1, int(0.06 * FPS_ANALYSE)))
@@ -110,7 +136,17 @@ def trouver_moments(clips: list[Path], max_par_clip: int = 3, log=print) -> list
         pics = pics[ok]
         if len(pics) == 0:
             pics = np.array([int(np.argmax(score))])
-        meilleurs = pics[np.argsort(score[pics])[::-1][:max_par_clip]]
+        ordre = pics[np.argsort(score[pics])[::-1]]
+        if mvt is not None:
+            # Jeux sans kills : un pic du son est souvent un clic de menu (inventaire, réglages) ou un
+            # écran noir. On garde les pics dont l'image est propre (mêmes règles que le montage).
+            from mouvement import image_propre
+            propres = [p for p in ordre[:max_par_clip + 4]
+                       if image_propre(clip, max(0.0, p / FPS_ANALYSE - 0.9), 1.6)]
+            if len(propres) < len(ordre[:max_par_clip + 4]):
+                log(f"    {len(ordre[:max_par_clip + 4]) - len(propres)} moment(s) écarté(s) (menu, écran noir) : {clip.name}")
+            ordre = np.array(propres, dtype=int)
+        meilleurs = ordre[:max_par_clip]
         for p in meilleurs:
             moments.append(Moment(t=float(p / FPS_ANALYSE), score=float(score[p]), **base))
 
@@ -206,7 +242,7 @@ def moments_medal(clips: list[Path], infos: dict, log=print, filtre: str = "tous
     index : index des kills (one taps, armes, agents déjà analysés) pour aller plus vite.
     armes / agents : garde seulement les kills faits avec ces armes / ces agents (Valorant).
     Retourne (moments, clips qui avaient des événements)."""
-    from medal_db import info_pour, poids
+    from medal_db import arme_evenement, info_pour, poids
     from index_kills import infos_kill
     armes_v = {_cle(a) for a in armes} if armes else None
     agents_v = {_cle(a) for a in agents} if agents else None
@@ -252,7 +288,7 @@ def moments_medal(clips: list[Path], infos: dict, log=print, filtre: str = "tous
         for g in groupes:
             noms = [n for n, _ in g]
             ik = connu(g[-1][1])
-            arme = (ik or {}).get("arme") or ""
+            arme = (ik or {}).get("arme") or arme_evenement(ic, g[-1][1] / duree)   # CS2 : Medal donne l'arme
             if armes_v is not None and _cle(arme) not in armes_v:
                 continue
             # Medal ne marque les one taps que dans CS2 : dans Valorant, on les détecte en lisant
@@ -303,8 +339,10 @@ def sequences_medal(clips: list[Path], infos: dict, ecart_max: float = 4.0, min_
         ic = info_pour(infos, clip)
         if ic is None or len(ic.evenements) < min_kills or ic.duree <= 0:
             continue
+        # Un clutch, un knock (Apex, Fortnite : l'ennemi est seulement à terre) ou une assistance ne sont
+        # pas un kill de plus dans la séquence.
         evts = sorted(((n, f * ic.duree) for n, f in ic.evenements
-                       if "clutch" not in n.lower()), key=lambda e: e[1])
+                       if not any(x in n.lower() for x in ("clutch", "knock", "assist"))), key=lambda e: e[1])
         meilleur, groupe = [], []
         for e in evts:
             groupe = groupe + [e] if groupe and e[1] - groupe[-1][1] <= ecart_max else [e]

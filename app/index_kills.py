@@ -24,7 +24,7 @@ from chemins import DONNEES as ICI
 FICHIER = ICI / "index_kills.json"
 VIGNETTES = ICI / "vignettes"
 VERSION = 2
-NON_KILLS = ("clutch",)          # événements Medal qui ne sont pas un kill de plus
+NON_KILLS = ("clutch", "knock", "assist")   # événements Medal qui ne sont pas un kill de plus (knock : Apex, Fortnite)
 
 _verrou = threading.RLock()
 
@@ -102,7 +102,10 @@ def indexer(racine: str, log=print, arret: threading.Event | None = None, max_cl
         except OSError:
             continue
         deja = index["clips"].get(cle)
-        if deja and abs(deja.get("mtime", 0) - mtime) < 1 and deja.get("complet"):
+        # 1.4.0 lit aussi la liste « bookmarks » de Medal (aces CS2…) : un clip indexé avec moins
+        # d'événements qu'il n'en a maintenant est refait.
+        if (deja and abs(deja.get("mtime", 0) - mtime) < 1 and deja.get("complet")
+                and deja.get("n_evts", len(deja.get("kills", []))) >= len(ic.evenements)):
             continue
         try:
             info = infos_video(clip)
@@ -130,6 +133,11 @@ def indexer(racine: str, log=print, arret: threading.Event | None = None, max_cl
                 k["arme"] = "Couteau" if "knife" in nom.lower() else v.get("arme")
                 if v.get("agent"):
                     agents[v["agent"]] += 1
+            elif est_kill(nom):
+                # CS2 : Medal donne l'arme et marque lui-même les one taps.
+                from medal_db import arme_evenement
+                k["arme"] = arme_evenement(ic, f) or None
+                k["one_tap"] = True if "one tap" in nom.lower() else None
             kills.append(k)
         agent = None
         if agents:
@@ -140,7 +148,7 @@ def indexer(racine: str, log=print, arret: threading.Event | None = None, max_cl
             "chemin": str(clip), "mtime": mtime, "date": date_clip(clip), "jeu": nom_jeu(clip),
             "match": ic.match, "favori": ic.favori, "duree": round(duree, 2), "agent": agent,
             "debut": ic.debut.timestamp() if ic.debut else None,
-            "taille": clip.stat().st_size, "kills": kills, "complet": True,
+            "taille": clip.stat().st_size, "kills": kills, "complet": True, "n_evts": len(ic.evenements),
         }
         faits += 1
         if faits % 5 == 0:

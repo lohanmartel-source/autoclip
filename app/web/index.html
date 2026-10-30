@@ -276,6 +276,14 @@
     <h2>Nouveau montage</h2>
 
     <div class="champ large">
+      <label class="titre">Modèle</label>
+      <div class="segments" data-champ="modele" id="choixModele">
+        <button data-v="" class="actif">Aucun</button>
+      </div>
+      <p class="astuce" id="infoModele">Une recette d'edit prête (comme les edits TikTok à succès) : elle règle tout, tu peux ensuite ajuster.</p>
+    </div>
+
+    <div class="champ large">
       <label class="titre">Format</label>
       <div class="segments" data-champ="format">
         <button data-v="vertical" class="actif">TikTok / Shorts</button><button data-v="youtube" data-pro="1">YouTube 16:9 long <b class="pro-tag">PRO</b></button>
@@ -417,6 +425,7 @@
     </div>
     <div class="champ bascule"><span>Arrêt sur image au drop<small>L'image se fige, l'ennemi ressort avec un contour lumineux</small></span><input type="checkbox" id="arret_image" checked></div>
     <div class="champ bascule"><span>Paroles dans le décor<small>Chaque mot chanté en énorme, derrière ton arme. Paroles trouvées sur internet (LRCLIB) ou dans un fichier .lrc du même nom que la musique</small><small class="note-ia">Synchro IA (Whisper) : le modèle (~480 Mo) se télécharge la 1re fois</small></span><input type="checkbox" id="paroles"></div>
+    <div class="champ bascule" id="champArmeIa"><span>Derrière l'arme (IA) <b class="pro-tag">PRO</b><small>L'arme et les mains sont découpées par IA : les mots passent vraiment derrière, avec des bords nets</small><small class="note-ia">Modèle de découpage (~45 Mo) téléchargé la 1re fois · le rendu prend un peu plus de temps</small></span><input type="checkbox" id="arme_ia"></div>
     <div class="champ" id="champChanson">
       <label class="titre">Chanson (Artiste - Titre)</label>
       <input type="text" id="titre_chanson" maxlength="120" placeholder="ex. Artiste - Titre (optionnel, sinon le nom du fichier)">
@@ -443,6 +452,7 @@
           <label class="titre">Images par seconde</label>
           <div class="segments" data-champ="fps"><button data-v="30" class="actif">30</button><button data-v="60" data-pro="1">60 <b class="pro-tag">PRO</b></button></div>
         </div>
+        <div class="champ bascule"><span>Rendu GPU (carte graphique) <b class="pro-tag">PRO</b><small id="infoGpu">Le montage est encodé par ta carte graphique : plus rapide, ton PC reste fluide.</small></span><input type="checkbox" id="gpu"></div>
       </details>
     </div>
 
@@ -660,7 +670,7 @@
 
 <script>
 const $ = (id) => document.getElementById(id);
-const choix = { rythme: "normal", cadrage: "flou", fps: "30", filtre: "tous", versions: "1", format: "vertical",
+const choix = { modele: "", rythme: "normal", cadrage: "flou", fps: "30", filtre: "tous", versions: "1", format: "vertical",
                 mode: "kills", langue_sous_titres: "fr", caster: "",
                 style: "edit", look: "auto", periode: "", joursKills: "1" };
 let etat = null, dernierResultat = null, reglagesCharges = false, minuterie = null, onglet = "Montage";
@@ -770,6 +780,13 @@ function choisirSegment(champ, v, parUtilisateur) {
   document.querySelectorAll(`.segments[data-champ="${champ}"] button`)
     .forEach((b) => b.classList.toggle("actif", b.dataset.v === String(v)));
   if (champ === "format") majFormat(parUtilisateur);
+  if (champ === "modele") {
+    const m = modeleChoisi();
+    $("infoModele").textContent = m ? m.description
+      : "Une recette d'edit prête (comme les edits TikTok à succès) : elle règle tout, tu peux ensuite ajuster.";
+    if (m && parUtilisateur) appliquerModele(m);
+    majFormat(false);
+  }
   if (champ === "mode") {
     const infos = {
       fun: "AutoClip cherche les moments où tu cries ou ris au micro, et les monte en plans plus longs avec un « boom » sur chaque réaction.",
@@ -791,10 +808,42 @@ function choisirSegment(champ, v, parUtilisateur) {
   }
   if (champ === "joursKills" && parUtilisateur) chargerKills();
 }
+// ---- modèles d'edits (Pro) : la liste vient du serveur (modeles.py)
+const modeleChoisi = () => ((etat && etat.modeles) || []).find((m) => m.id === choix.modele) || null;
+function majModeles() {
+  const g = $("choixModele");
+  if (!etat || !etat.modeles || g.dataset.charge) return;
+  etat.modeles.forEach((m) => {
+    const b = document.createElement("button");
+    b.dataset.v = m.id; b.dataset.pro = "1"; b.title = m.description;
+    b.innerHTML = esc(m.nom) + ' <b class="pro-tag">PRO</b>';
+    g.appendChild(b);
+  });
+  g.dataset.charge = "1";
+  if (etat.reglages && etat.reglages.modele) choisirSegment("modele", etat.reglages.modele);
+}
+function appliquerModele(m) {
+  const r = Object.assign({}, m.reglages);
+  if ("textes_kills" in r) r.textes = r.textes_kills;
+  if ("ralenti" in r) r.ralenti = r.ralenti < 1;
+  r.fps = String(r.fps || 30);
+  appliquerReglages(r);
+  if (r.duree) { $("duree").value = r.duree; majValeurs(); }
+}
+function majGpu() {
+  const nom = etat && etat.encodeur_gpu;
+  $("infoGpu").textContent = nom ? `Carte détectée : ${nom}. Le montage est encodé par ta carte graphique (plus rapide).`
+    : "Aucune carte graphique compatible trouvée : le rendu restera sur le processeur.";
+}
+$("gpu").addEventListener("change", () => {
+  if ($("gpu").checked && etat && !estPro()) { $("gpu").checked = false; proposerPro("Rendu GPU"); }
+});
 function majFormat(parUtilisateur) {
   const yt = choix.format === "youtube";
-  $("duree").min = yt ? 60 : 8; $("duree").max = yt ? 180 : 60; $("duree").step = yt ? 10 : 1;
-  if (parUtilisateur) $("duree").value = yt ? 150 : 20;
+  const court = yt && !!(modeleChoisi() || {}).court;   // modèle 16:9 en un seul edit (~30-40 s)
+  $("duree").min = court ? 15 : yt ? 60 : 8;
+  $("duree").max = yt && !court ? 180 : 60; $("duree").step = yt && !court ? 10 : 1;
+  if (parUtilisateur) $("duree").value = court ? 40 : yt ? 150 : 20;
   $("champVersions").classList.toggle("cache", yt);
   majValeurs();
 }
@@ -807,7 +856,13 @@ const majValeurs = () => {
   $("valDecalage").textContent = dp === 0 ? "0 s" : (dp > 0 ? "+" : "−") + Math.abs(dp).toFixed(2).replace(".", ",") + " s";
 };
 ["duree", "son_jeu", "derniers", "decalage_paroles"].forEach((id) => $(id).addEventListener("input", majValeurs));
-const majParoles = () => $("champChanson").classList.toggle("cache", !$("paroles").checked);
+const majParoles = () => {
+  $("champChanson").classList.toggle("cache", !$("paroles").checked);
+  $("champArmeIa").classList.toggle("cache", !$("paroles").checked);
+};
+$("arme_ia").addEventListener("change", () => {
+  if ($("arme_ia").checked && etat && !estPro()) { $("arme_ia").checked = false; proposerPro("Paroles derrière l'arme (IA)"); }
+});
 $("paroles").addEventListener("change", majParoles);
 majParoles();
 
@@ -826,6 +881,8 @@ function appliquerReglages(r) {
   majParoles();
   ["rythme", "filtre", "versions", "cadrage", "fps", "style", "look", "mode", "langue_sous_titres", "caster"].forEach((k) => { if (r[k]) choisirSegment(k, r[k]); });
   if (r.profil) profilVoulu = r.profil;
+  if (r.gpu !== undefined && r.gpu !== null) $("gpu").checked = !!r.gpu && (!etat || estPro());
+  if (r.arme_ia !== undefined && r.arme_ia !== null) $("arme_ia").checked = !!r.arme_ia && (!etat || estPro());
   if (Array.isArray(r.jeux)) jeuxChoisis = new Set(r.jeux);
   if (Array.isArray(r.armes)) armesChoisies = new Set(r.armes);
   if (Array.isArray(r.agents)) agentsChoisis = new Set(r.agents);
@@ -854,7 +911,7 @@ async function rafraichir() {
   const ix = etat.index || {};
   $("etatIndex").textContent = ix.en_cours ? `Analyse de tes clips en cours (${ix.clips} faits)… ${ix.message || ""}`
     : `${ix.clips || 0} clips analysés (armes, agents, one taps).`;
-  majMusiques(); majJeux(); majTache(); majVideos(); majApp();
+  majMusiques(); majJeux(); majTache(); majVideos(); majApp(); majModeles(); majGpu();
   $("etatClips").textContent = `${ix.clips || 0} clips analysés` + (etat.clips_ok ? " · Medal détecté" : " · dossier Medal à choisir");
   $("etatVersion").textContent = `AutoClip ${etat.version} · ` + (etat.pro && etat.pro.actif ? "Pro" : "Version gratuite");
   planifier(etat.tache.en_cours ? 1000 : 5000);
@@ -892,6 +949,11 @@ function majJeux() {
   if (!etat.jeux.length) { liste.innerHTML = '<span class="vide">Aucun clip trouvé</span>'; return; }
   if (!estPro()) [...jeuxChoisis].forEach((n) => { const j = etat.jeux.find((x) => x.nom === n); if (j && j.pro) jeuxChoisis.delete(n); });
   puces(liste, etat.jeux.map((j) => [j.nom, j.clips]), jeuxChoisis, () => { liste.dataset.cle = ""; majJeux(); });
+  liste.querySelectorAll("button").forEach((b, i) => {
+    const j = etat.jeux[i];
+    b.title = j.mode === "moments" ? "Moments forts : Medal n'enregistre pas de kills pour ce jeu (son, action, mouvement)"
+      : "Montage des kills enregistrés par Medal";
+  });
   if (!estPro()) liste.querySelectorAll("button").forEach((b, i) => {
     const j = etat.jeux[i]; if (!j.pro) return;
     b.classList.add("verrou"); b.insertAdjacentHTML("beforeend", '<b class="pro-tag">PRO</b>');
@@ -1024,7 +1086,8 @@ function corpsMontage() {
     mode: choix.mode, langue_sous_titres: choix.langue_sous_titres, filigrane: $("filigrane").checked,
     caster: choix.caster, arret_image: $("arret_image").checked, instrumental: $("instrumental").checked,
     paroles: $("paroles").checked, titre_chanson: $("titre_chanson").value.trim(), decalage_paroles: +$("decalage_paroles").value,
-    profil: $("profil").value,
+    arme_ia: $("paroles").checked && $("arme_ia").checked,
+    profil: $("profil").value, modele: choix.modele, gpu: $("gpu").checked,
     armes: [...armesChoisies], agents: [...agentsChoisis],
   };
 }

@@ -28,12 +28,15 @@ import equipe
 import morts
 import sessions
 import index_kills
+import jeux as jeux_profils
 import medal_dossier
 from autoclip import Options, generer, jeux_disponibles
 from outils import ErreurAutoclip
 from chemins import DONNEES, RESSOURCES, VERSION
 import liens
 import licence
+import modeles
+import outils
 
 CONFIG = DONNEES / "serveur.json"
 PAGE = RESSOURCES / "web" / "index.html"
@@ -232,6 +235,8 @@ class Tache:
                 self.etape = f"Rendu des plans ({m.group(1)}/{m.group(2)})"
             if "assemblage final" in msg:
                 self.progression, self.etape = 0.88, "Assemblage final"
+            if "découpage de l'arme" in msg or "arme découpée" in msg:
+                self.etape = "Paroles : découpage de l'arme (IA)"
             m = re.search(r"modèle IA (\d+) %", msg)
             if m:
                 self.etape = f"Téléchargement du modèle IA des paroles ({m.group(1)} %)"
@@ -498,10 +503,13 @@ class Gestionnaire(BaseHTTPRequestHandler):
             "version": VERSION,
             "liens": {k: bool(v) for k, v in liens.LIENS.items()},
             "capacites": capacites(),
+            "modeles": modeles.pour_ui(),
+            "encodeur_gpu": outils.NOMS_ENCODEURS.get(outils.encodeur_gpu() or "", ""),
             "pro": licence.etat(),
             "mise_a_jour": liens.mise_a_jour_dispo(),
             "index": self.surveillant.etat() if self.surveillant else {},
-            "jeux": [{"nom": j, "clips": n, "pro": not licence.est_jeu_gratuit(j)} for j, n in self._jeux().items()],
+            "jeux": [{"nom": j, "clips": n, "pro": not licence.est_jeu_gratuit(j),
+                      "mode": "kills" if jeux_profils.profil_nom(j).kills else "moments"} for j, n in self._jeux().items()],
         }
 
     def _infos_videos(self, videos: list[Path]) -> dict:
@@ -779,10 +787,12 @@ class Gestionnaire(BaseHTTPRequestHandler):
         if d.get("pseudo") is not None:
             self.config["pseudo"] = str(d.get("pseudo"))[:30]
         duree_max = 200 if format_ == "youtube" else 90
+        modele = str(d.get("modele") or "") if modeles.get(str(d.get("modele") or "")) else ""
+        ralenti_modele = modeles.get(modele)["reglages"].get("ralenti", 0.5) if modele else 0.5
 
         o = Options(clips=[self.config["clips"]], musique=str(musique), sortie=str(sortie),
                     duree=nombre("duree", 150 if format_ == "youtube" else 20, 8, duree_max), cadrage=cadrage, rythme=rythme,
-                    son_jeu=nombre("son_jeu", 30, 0, 100) / 100, ralenti=0.5 if d.get("ralenti", True) else 1.0,
+                    son_jeu=nombre("son_jeu", 30, 0, 100) / 100, ralenti=ralenti_modele if d.get("ralenti", True) else 1.0,
                     debut_musique=debut, derniers=nombre("derniers", 25, 0, 500, int),
                     texte=str(d.get("texte", ""))[:60], fps=60 if str(d.get("fps")) == "60" else 30,
                     apercu=apercu, filtre=filtre, jeux=jeux, textes_kills=bool(d.get("textes", True)),
@@ -801,7 +811,9 @@ class Gestionnaire(BaseHTTPRequestHandler):
                     langue_sous_titres="en" if d.get("langue_sous_titres") == "en" else "fr",
                     filigrane=("@" + self.config["pseudo"]) if d.get("filigrane") and self.config.get("pseudo") else "",
                     paroles=bool(d.get("paroles", False)), titre_chanson=str(d.get("titre_chanson") or "").strip()[:120],
-                    decalage_paroles=nombre("decalage_paroles", 0, -0.5, 0.5, float))
+                    decalage_paroles=nombre("decalage_paroles", 0, -0.5, 0.5, float),
+                    arme_ia=bool(d.get("paroles", False)) and bool(d.get("arme_ia", False)),
+                    modele=modele, encodeur_gpu=bool(d.get("gpu", False)))
         if not licence.est_pro():
             pro = licence.fonctions_pro_demandees(o)
             if pro:
@@ -820,7 +832,9 @@ class Gestionnaire(BaseHTTPRequestHandler):
                 "musique", "duree", "cadrage", "rythme", "filtre", "jeux", "textes", "sequences", "versions", "hook",
                 "intro_3d", "voix", "sous_titres", "son_jeu", "ralenti", "derniers", "texte", "fps", "apercu", "format", "style", "look",
                 "compteur", "outro", "effets_sonores", "armes", "agents", "mode", "langue_sous_titres", "filigrane",
-                "caster", "instrumental", "arret_image", "profil", "paroles", "titre_chanson", "decalage_paroles")}
+                "caster", "instrumental", "arret_image", "profil", "paroles", "titre_chanson", "decalage_paroles",
+                "arme_ia",
+                "modele", "gpu")}
         sauver_config(self.config)
         self._json({"ok": True})
 

@@ -46,7 +46,7 @@ STYLES = {
         "entrees": {"glitch": "whip", "spin": "zoom", "leak": "zoom"},
     },
 }
-TRANSITIONS_EDIT = ["hblur", "zoomin", "fade", "hblur", "zoomin"]   # fondus doux de la montée (style edit)
+TRANSITIONS_EDIT = ["hblur", "fade", "hblur", "wipeleft"]   # fondus doux de la montée (style edit) ; « zoomin » retiré : image pixelisée puis blanche
 
 
 @dataclass
@@ -85,6 +85,7 @@ class Segment:
     cartes: list = field(default_factory=list)  # intro 3D : [(clip, instant du kill), …] des cartes du nuage
     vibe: bool = False              # plan sans kill (déplacement avant l'action), calé sur la musique
     forces_beats: list = field(default_factory=list)  # force de la musique sur chaque beat du plan
+    showcase: bool = False          # modèle « Showcase skin » : intro calme sur l'arme, halo chaud
 
     def temps_kills(self) -> list[float]:
         if self.kills_sortie:
@@ -153,7 +154,8 @@ def planifier(musique: Musique, moments: list[Moment], fps: int, rythme: str = "
               ralenti: float = 0.5, graine: int | None = None,
               sequence: Moment | None = None, hook: bool = False,
               style: str = "auto", gel: bool = False,
-              profil: dict | None = None, intro_3d: bool = False) -> tuple[list[Segment], float, float]:
+              profil: dict | None = None, intro_3d: bool = False,
+              modele: str = "") -> tuple[list[Segment], float, float]:
     """Retourne (segments, décalage du début de la musique, durée du montage)."""
     if not moments:
         raise ValueError("aucun moment")
@@ -161,15 +163,20 @@ def planifier(musique: Musique, moments: list[Moment], fps: int, rythme: str = "
     if profil:                     # style copié d'une vidéo : même durée de plan
         from copie_style import facteur_rythme
         f = facteur_rythme(profil)
+    if modele:                     # modèle d'edit (Pro) : durée des plans propre au modèle
+        import modeles
+        f *= modeles.facteur_rythme(modele)
     p = musique.periode
     edit = style == "edit"         # edits TikTok : coupes plus serrées (~1-1,5 s), drop plus court
     n_pre = _beats_par_plan(p, (1.0 if edit else 1.4) * f)
-    n_post = _beats_par_plan(p, 0.7 * f)
+    n_post = _beats_par_plan(p, 0.7 * f * (modeles.facteur_apres(modele) if modele else 1.0))
     n_drop = _beats_par_plan(p, 1.6 if edit else 2.2, (2, 4, 8))
 
     beats = musique.beats
     accents = musique.accents if musique.accents is not None else [0.5] * len(beats)
     bornes = _bornes(len(beats) - 1, musique.drop, n_pre, n_drop, n_post)
+    if modele:
+        bornes = modeles.plans_showcase(beats, bornes, musique.drop, modele)
     i_drop = bornes.index(musique.drop) if musique.drop in bornes else 0
     dernier = len(beats) - 1
 
@@ -304,6 +311,8 @@ def planifier(musique: Musique, moments: list[Moment], fps: int, rythme: str = "
             seg.impact = False          # pas de ralenti : on garde le moment drôle à vitesse normale
         _choisir_effets(seg, segments[-1] if segments else None, rng, fps)
         _appliquer_style(seg, segments[-1] if segments else None, style, rng)
+        if modele:
+            modeles.ajuster_segment(seg, segments[-1] if segments else None, modele, rng)
         if rythme == "fun":
             seg.effets = [e for e in seg.effets if e != "velocity"]
         if profil and seg.role == "apres" and segments and rng.random() < profil.get("flash", 0):
@@ -345,6 +354,8 @@ def planifier(musique: Musique, moments: list[Moment], fps: int, rythme: str = "
     _refuser_images_sales(segments, moments, p, fps, ralenti)
     if style == "edit":
         _refuser_plans_morts(segments, moments, p, fps, ralenti)
+        # Les plans changés ci-dessus n'ont pas été contrôlés : 2e passe (menus, écrans bouchés).
+        _refuser_images_sales(segments, moments, p, fps, ralenti)
         # Edit : le texte de kill est réservé au drop (et à la fin d'une séquence), en petit.
         for seg in segments:
             if seg.role not in ("drop",) and not seg.moment.etiquette.startswith(("@", "Mort")):
@@ -356,9 +367,39 @@ def planifier(musique: Musique, moments: list[Moment], fps: int, rythme: str = "
 
     if role_transition == "intro3d" and i_hook is not None:
         segments[1].cartes = _cartes_intro(segments, moments)
+    if modele:
+        _intro_showcase(segments, moments, p, fps, ralenti, modele)
 
     duree = image(bornes[-1]) / fps
     return segments, musique.debut + t0, duree
+
+
+def _intro_showcase(segments: list[Segment], moments: list[Moment], periode: float, fps: int, ralenti: float,
+                    modele: str) -> None:
+    """Modèle « Showcase skin » : le 1er plan montre l'arme de près (plan calme ou inspection avant le
+    1er kill d'un clip, trouvé avec les temps de Medal et le mouvement), légèrement ralenti ; il sort en
+    whip très flou, pile sur le beat, vers le plan suivant."""
+    import dataclasses
+    import modeles
+    if not modeles.rendu_de(modele).get("showcase") or len(segments) < 3 or segments[0].role != "montee":
+        return
+    s0, s1 = segments[0], segments[1]
+    vitesse = 0.8
+    d = s0.images_totales / fps
+    candidats = ([s.moment for s in segments if s.role in ("drop", "sequence", "apres")]
+                 + sorted(moments, key=lambda m: m.score, reverse=True))
+    trouve = modeles.trouver_showcase(candidats, moments, d * vitesse + 0.05)
+    if trouve is None:
+        return
+    m, debut = trouve
+    s0.moment = dataclasses.replace(m, t=debut + d * vitesse, etiquette="Showcase", kills=[])
+    s0.showcase, s0.vibe, s0.texte, s0.kills_sortie, s0.t_kill = True, False, "", [], None
+    s0.transition, s0.images_transition, s0.entree = None, 0, None
+    s0.effets = ["showcase", "fondu_noir"]
+    s0.morceaux = [Morceau(debut, vitesse, s0.images_totales)]
+    s0.sortie = "whip"
+    s1.transition, s1.images_transition, s1.entree = None, 0, "whip"
+    _calculer_morceaux(s1, periode, fps, ralenti)
 
 
 def beats_intro_3d(periode: float) -> int:
@@ -409,12 +450,17 @@ def _varier(moments: list[Moment], besoin: int, max_par_clip: int = 2) -> list[M
     return sorted(choisis, key=lambda m: m.score, reverse=True)
 
 
-TEXTES = [("ace", "ACE"), ("clutch", "CLUTCH"), ("5k", "5K"), ("4k", "4K"), ("one tap", "ONE TAP"),
-          ("knife", "KNIFE"), ("3k", "3K")]
+TEXTES = [("ace", "ACE"), ("victory", "VICTORY"), ("champion", "CHAMPION"), ("squad wipe", "SQUAD WIPE"),
+          ("clutch", "CLUTCH"), ("5k", "5K"), ("4k", "4K"), ("one tap", "ONE TAP"),
+          ("knife", "KNIFE"), ("3k", "3K"), ("headshot", "HEADSHOT")]   # headshot : CS2 (Medal le marque)
 
 
 def texte_kill(etiquette: str) -> str:
     e = etiquette.lower()
+    import re
+    m = re.search(r"\b1\s*v\s*([2-5])\b", e)          # clutch CS2 : « 1v3 »
+    if m:
+        return f"1V{m.group(1)}"
     for cle, texte in TEXTES:
         if cle in e:
             return texte
@@ -469,10 +515,20 @@ def _refuser_images_sales(segments: list[Segment], moments: list[Moment], period
             continue
         origine, texte = seg.moment, seg.texte
         gel = any(getattr(mo, "gel", False) for mo in seg.morceaux)
-        essais = [m for m in moments if m.clip not in utilises and (seg.role != "approche" or m.t >= 2.0)]
+        essais = [m for m in moments if m.clip not in utilises and (seg.role != "approche" or m.t >= 2.0)
+                  and (seg.role != "sequence" or len(getattr(m, "kills", None) or []) >= 2)]
+        if not essais:
+            # Peu de clips (autres jeux) : un autre moment d'un clip déjà utilisé, loin dans le temps.
+            pris = [(s.moment.clip, s.moment.t) for s in segments]
+            essais = [m for m in moments if all(m.clip != c or abs(m.t - t) > 4 for c, t in pris)
+                      and (seg.role != "approche" or m.t >= 2.0)
+                      and (seg.role != "sequence" or len(getattr(m, "kills", None) or []) >= 2)]
         for m in sorted(essais, key=lambda m: m.score, reverse=True)[:6]:
             seg.moment = m
-            _calculer_morceaux(seg, periode, fps, ralenti, gel)
+            try:
+                _calculer_morceaux(seg, periode, fps, ralenti, gel)
+            except (IndexError, ValueError, ZeroDivisionError):
+                continue
             debut = min(mo.debut for mo in seg.morceaux)
             fin = max(mo.debut + mo.duree_source(fps) for mo in seg.morceaux)
             if image_propre(m.clip, debut, fin - debut + 0.5):

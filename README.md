@@ -15,6 +15,14 @@ de données de Medal, donc chaque plan est un vrai kill.
 Tes données (réglages, index des kills, styles) sont dans `%APPDATA%\AutoClip`.
 Tes montages vont dans `Vidéos\AutoClip`, tes musiques dans `Musique\AutoClip`.
 
+### Nouveautés 1.4.0 (Pro)
+- **Modèles d'edits** : Paroles 16:9, Showcase skin, Phonk rapide, Ciné — tous les réglages en un clic.
+- **Paroles derrière l'arme** : une IA locale (MobileSAM, ~45 Mo téléchargés la 1re fois) détoure l'arme et la main.
+- **Autres jeux** : Counter-Strike 2 au niveau de Valorant (kills, headshots, aces lus dans Medal), Fortnite et Apex,
+  et un mode « moments forts » pour les jeux sans kills (Minecraft…).
+- **Rendu GPU** : encodage NVENC / AMF / Quick Sync, repli automatique sur le processeur.
+- Paroles synchronisées par IA (Whisper) au mot près.
+
 ### Nouveautés 1.3.0
 - **Style « Edit »** (par défaut) : flou de mouvement réel, speed ramps lissées, effets de beat dosés,
   plans « vibe », fondu d'ouverture, 60 fps fluide (Pro).

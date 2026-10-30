@@ -299,6 +299,33 @@ def _lignes_de_tableau(f: np.ndarray) -> int:
     return n
 
 
+def _menu(im: np.ndarray, f: np.ndarray, jeu: str) -> bool:
+    """Image de menu selon le jeu (im : RGB 0-1, f : luminance 0-255)."""
+    if jeu == "valorant":
+        # Menus de Valorant (TAB, fin de manche, achat) : beaucoup de longues lignes droites
+        # horizontales, où qu'elles soient dans l'image (rangées du tableau).
+        return _lignes_de_tableau(f) >= 5
+    h, w = f.shape
+    mx, mn = im.max(axis=2), im.min(axis=2)
+    sat = (mx - mn) / (mx + 1e-6)
+    lum = f / 255
+    # Écran voilé de gris sombre (menu d'achat de CS2, caméra de mort, écran de pause) : presque toute
+    # l'image grise et sombre. Une scène sombre du jeu (tunnel, cave) garde ses couleurs.
+    voile = float(((lum > 0.03) & (lum < 0.3) & (sat < 0.3)).mean())
+    if jeu == "cs2":
+        if voile > 0.5 and float(sat.mean()) < 0.16:
+            return True
+        # Tableau des scores (TAB) et panneau de fin de manche : rangées de lignes droites dans un
+        # panneau translucide plus sombre que le reste de l'image (les planches et les escaliers des
+        # maps ont des lignes aussi, mais ne sont pas plus sombres au centre).
+        centre = float(lum[int(h * .3):int(h * .7), int(w * .3):int(w * .7)].mean())
+        return _lignes_de_tableau(f) >= 5 and centre < 0.82 * float(lum.mean())
+    # Autres jeux : on ne connaît pas leurs menus. Un voile gris très net (pause, écran assombri), ou
+    # un écran couvert de panneaux et de rangées (inventaire, réglages : 11 à 29 longues lignes dans
+    # Minecraft, 0 à 3 en jeu ; seuil haut car les murs de planches en ont quelques-unes).
+    return (voile > 0.75 and float(sat.mean()) < 0.1) or _lignes_de_tableau(f) >= 10
+
+
 def image_propre(clip: Path, debut: float, duree: float) -> bool:
     """Faux si la fenêtre montre un menu (tableau des scores TAB, achat d'armes), une image unie,
     brûlée ou sans détails, ou un écran bouché par une seule couleur (fumée, ultime, flash collés à
@@ -314,14 +341,17 @@ def image_propre(clip: Path, debut: float, duree: float) -> bool:
     if n < 1:
         return True
     rgb = np.frombuffer(p.stdout[: n * w * h * 3], np.uint8).reshape(n, h, w, 3).astype(np.float32) / 255
+    try:
+        from jeux import profil
+        jeu = profil(clip).menus
+    except Exception:
+        jeu = "valorant"
     menus = sales = 0
     y0, y1, x0, x1 = int(h * .25), int(h * .85), int(w * .22), int(w * .78)
     for im in rgb:
         f = im.mean(axis=2) * 255
         c = f[y0:y1, x0:x1]
-        # Menus de Valorant (TAB, fin de manche, achat) : beaucoup de longues lignes droites
-        # horizontales, où qu'elles soient dans l'image (rangées du tableau).
-        if _lignes_de_tableau(f) >= 5:
+        if _menu(im, f, jeu):
             menus += 1
             continue
         g = np.hypot(np.diff(c, axis=0)[:, :-1], np.diff(c, axis=1)[:-1])
@@ -333,7 +363,8 @@ def image_propre(clip: Path, debut: float, duree: float) -> bool:
         mx, mn = z.max(axis=2), z.min(axis=2)
         sat = (mx - mn) / (mx + 1e-6)
         vif = (sat > 0.5) & (mx > 0.45)
-        if vif.mean() > 0.45:
+        # Hors FPS (Minecraft, courses…), un grand pré vert ou un ciel bleu sont normaux : seuil plus haut.
+        if vif.mean() > (0.45 if jeu in ("valorant", "cs2") else 0.7):
             r, gg, b = z[..., 0], z[..., 1], z[..., 2]
             teinte = (np.degrees(np.arctan2(np.sqrt(3) * (gg - b), 2 * r - gg - b)) + 360) % 360
             hist, _ = np.histogram(teinte[vif], bins=12, range=(0, 360))

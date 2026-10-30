@@ -12,7 +12,7 @@ import subprocess
 
 import numpy as np
 
-from outils import _FLAGS, chemin_filtre, executer, flux_audio, pair
+from outils import _FLAGS, args_encodage, chemin_filtre, executer, flux_audio, pair
 from planification import Segment
 
 
@@ -36,6 +36,7 @@ class Rendu:
     accent: str = ""           # couleur d'accent « #RRGGBB » choisie par le look (rempli au rendu)
     flou_mouvement: bool = True  # vrai flou de mouvement sur les whips, zooms et secousses
     grain: bool = False        # grain fin (look pellicule)
+    modele: str = ""           # modèle d'edit (Pro, voir modeles.py) : dosages, halo, flou, intro showcase
 
     @property
     def base(self) -> int:
@@ -72,10 +73,15 @@ def _atempo(vitesse: float) -> str:
     return ",".join(filtres) or "anull"
 
 
-def _cadrage(r: Rendu, source_verticale: bool) -> str:
+def _cadrage(r: Rendu, source_verticale: bool, zoom: float = 1.0, ancre_y: float = 0.5) -> str:
     W, H = r.largeur, r.hauteur
     plein = (f"scale={W}:{H}:force_original_aspect_ratio=increase:flags=bicubic,"
              f"crop={W}:{H},setsar=1")
+    if zoom > 1.001 and r.cadrage == "crop" and not (source_verticale or r.horizontal):
+        # Recadrage un peu plus serré selon le jeu (CS2 : barre des joueurs et des scores en haut,
+        # vie/munitions en bas) ; ancre_y > 0.5 coupe plus en haut qu'en bas.
+        plein = (f"scale={pair(W * zoom)}:{pair(H * zoom)}:force_original_aspect_ratio=increase:flags=bicubic,"
+                 f"crop={W}:{H}:(iw-ow)/2:(ih-oh)*{ancre_y:.2f},setsar=1")
     if r.cadrage == "crop" or source_verticale or r.horizontal:
         return f"[vc]{plein}[vb]"
     if r.cadrage == "ecran_partage":
@@ -157,6 +163,9 @@ def _effets(seg: Segment, r: Rendu) -> str:
     fen_mvt = []                     # fenêtres (s) de mouvement rapide : flou de mouvement
     edit = r.style == "edit"
     dz = DOSAGES["edit" if edit else "defaut"]
+    if r.modele:
+        import modeles
+        dz = modeles.dosage(r, dz)
     flou_vrai = r.flou_mouvement
     echelle = r.base / 1080
 
@@ -212,6 +221,16 @@ def _effets(seg: Segment, r: Rendu) -> str:
                         z.append(f"{0.018 + 0.04 * min(1.0, f):.3f}*{env_dec(b, 0.1)}")
     if "monte" in effets:
         z.append(f"0.16*pow(it/{_n(D)},2)")
+    if "showcase" in effets:
+        # Intro showcase (modèle) : lent zoom avant sur l'arme, lumière chaude qui monte puis s'ouvre.
+        # La caméra glisse vers l'arme (en bas à droite) : le skin remplit de plus en plus l'image.
+        z.append(f"0.06+0.22*pow(it/{_n(D)},1.3)")
+        kx.append("0.75")
+        ky.append("0.6")
+        lum.append(f"0.05+0.10*exp(-pow((t-{_n(0.6 * D)})/{_n(0.22 * D)},2))")
+        g_r.append("0.3")
+        g_b.append("0.24")
+        filtres_apres.append("colorchannelmixer=rr=1.06:rg=0.04:gg=0.98:bb=0.86")
     if "shake" in effets:
         secousse(Tk)
     if "flash" in effets:
@@ -365,7 +384,8 @@ def _effets(seg: Segment, r: Rendu) -> str:
         borne = lambda termes: f"max(-1,min(1,{'+'.join(termes)}))" if termes else "0"
         zoompan = (f"zoompan=z='{zz}':x='(iw/2-iw/zoom/2)*(1+{borne(kx)})'"
                    f":y='(ih/2-ih/zoom/2)*(1+{borne(ky)})':d=1:s={W}x{H}:fps={{FPS}}")
-        fen = [(int(f_[0] * fps), int(round(f_[1] * fps)) + 1, f_[2] if len(f_) > 2 else 1.0)
+        obtu = getattr(r, "obturateur", 0) or 0      # modèle : flou de mouvement plus fort
+        fen = [(int(f_[0] * fps), int(round(f_[1] * fps)) + 1, max(obtu, f_[2] if len(f_) > 2 else 1.0))
                for f_ in fen_mvt] if flou_vrai else []
         n_sous = 6 if fps <= 30 else 3
         graphe.append(mouvement.graphe_camera("vcol", "vcam", camera, zoompan, fen, total, fps, n_sous))
@@ -377,7 +397,8 @@ def _effets(seg: Segment, r: Rendu) -> str:
     f = list(filtres_apres)
     if finition:
         # Bloom + vignette légère (+ grain) : même finition sur tout le montage.
-        graphe.append(_look.chaine_finition(r, "vcam", "vfin"))
+        graphe.append(_look.chaine_finition(r, "vcam", "vfin",
+                                            force=0.9 if "showcase" in effets else None))
         entree = "vfin"
     else:
         entree = "vcam"
@@ -453,9 +474,10 @@ def rendre_segment(seg: Segment, sortie: Path, r: Rendu) -> Path:
             if m.a_audio:
                 wav = mouvement.audio_rampe(m.clip, piste, mo.debut, mo.rampe, mo.images, r.fps,
                                             sortie.with_name(f"rampe_{seg.index:02d}_{i}.wav"))
-        if r.style == "edit" and r.flou_mouvement and not mo.inverse:
+        if (r.style == "edit" or getattr(r, "seuil_flicks", 0)) and r.flou_mouvement and not mo.inverse:
             # Flicks du joueur : flou directionnel proportionnel à la vitesse de la caméra.
-            flick = mouvement.filtre_flou_camera(m.clip, mo.debut, mo.duree_source(r.fps), m.largeur)
+            flick = mouvement.filtre_flou_camera(m.clip, mo.debut, mo.duree_source(r.fps), m.largeur,
+                                                 seuil=getattr(r, "seuil_flicks", 0) or 0.045)
             if flick:
                 vitesse_v = f"setpts=PTS-STARTPTS,{flick},{vitesse_v}"
         parties.append(
@@ -481,11 +503,16 @@ def rendre_segment(seg: Segment, sortie: Path, r: Rendu) -> Path:
         parties.append(f"{entrees}concat=n={n}:v=1:a=1[vc][ac]")
 
     verticale = m.hauteur > m.largeur
-    parties.append(_cadrage(r, verticale))
+    try:
+        from jeux import profil as profil_jeu
+        zoom_jeu, ancre_jeu = profil_jeu(m.clip).zoom_crop, profil_jeu(m.clip).ancre_crop
+    except Exception:
+        zoom_jeu, ancre_jeu = 1.0, 0.5
+    parties.append(_cadrage(r, verticale, zoom_jeu, ancre_jeu))
     parties.append(_effets(seg, r))
 
     cmd += ["-filter_complex", ";".join(parties), "-map", "[vout]", "-map", "[ac]",
-            "-c:v", "libx264", "-preset", "veryfast", "-crf", "16", "-r", str(r.fps),
+            *args_encodage("plan"), "-r", str(r.fps),
             "-c:a", "pcm_s16le", "-ar", "48000", str(sortie)]
     executer(cmd)
     return sortie
@@ -910,9 +937,8 @@ def assembler(segments: list[Segment], fichiers: list[Path], musique: Path, debu
     parties.append(f"[{ca}]atrim=duration={duree:.4f},asetpts=PTS-STARTPTS[jeu]")
 
     image = dossier / "image_et_jeu.mkv"
-    preset, crf = ("veryfast", "23") if r.qualite == "apercu" else ("medium", "18")
     executer(cmd + ["-filter_complex", ";".join(parties), "-map", "[vfinal]", "-map", "[jeu]",
-                    "-c:v", "libx264", "-preset", preset, "-crf", crf, "-pix_fmt", "yuv420p",
+                    *args_encodage("apercu" if r.qualite == "apercu" else "finale"),
                     "-r", str(r.fps), "-c:a", "pcm_s16le", "-ar", str(SR_MIX), "-t", f"{duree:.4f}", str(image)])
 
     jeu = _decoder_stereo(["-i", str(image), "-map", "0:a"])

@@ -69,7 +69,14 @@ def image_gelee(clip: Path, t: float, largeur: int, hauteur: int, sortie: Path) 
     img = _lire(clip, t, largeur, hauteur)
     if img is None:
         return False
-    m = masque_ennemi(img)
+    try:
+        from jeux import profil
+        contour = profil(clip).contour_ennemi
+    except Exception:
+        contour = True
+    # Le contour jaune n'existe que dans Valorant : ailleurs (CS2, Minecraft…) le sable ou un mur jaune
+    # serait pris pour un ennemi. Arrêt sur image simple.
+    m = masque_ennemi(img) if contour else None
     gris = img.mean(axis=2, keepdims=True)
     fond = (0.35 * img + 0.65 * gris) * 0.55          # décor délavé et assombri
     if m is None:

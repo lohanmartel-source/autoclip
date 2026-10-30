@@ -33,6 +33,9 @@ for paquet in ("faster_whisper", "ctranslate2", "huggingface_hub", "tokenizers",
         datas += copy_metadata(paquet)
     except Exception:
         pass            # paquet absent : rien à copier
+# Paroles derrière l'arme (Pro, arme_ia.py) : MobileSAM en ONNX, lancé par le même onnxruntime.
+# Importé à la demande par paroles.py ; le modèle (~45 Mo) n'est PAS embarqué (DONNEES/modeles).
+hidden += ["arme_ia"]
 if find_spec("hf_xet") is not None:
     hidden.append("hf_xet")   # téléchargement rapide des modèles (importé à la demande par huggingface_hub)
 

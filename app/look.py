@@ -80,9 +80,11 @@ def _image(clip: Path, t: float, w: int = 160, h: int = 90) -> np.ndarray | None
     return np.frombuffer(p.stdout, np.uint8).reshape(h, w, 3).astype(np.float32) / 255
 
 
-def teinte_dominante(images: list[np.ndarray]) -> float | None:
+def teinte_dominante(images: list[np.ndarray], vue_fps: bool = True, murs_chauds: bool = True) -> float | None:
     """Teinte (degrés) des pixels colorés les plus présents, surtout vers le bas à droite (l'arme).
-    None si les images sont presque grises."""
+    None si les images sont presque grises.
+    vue_fps=False (Minecraft, courses, jeux à la 3e personne) : pas d'arme à viser, on regarde le centre.
+    murs_chauds=False : les teintes chaudes ternes ne sont pas des murs de map à ignorer."""
     if not images:
         return None
     hist = np.zeros(36)
@@ -97,15 +99,23 @@ def teinte_dominante(images: list[np.ndarray]) -> float | None:
         hue = np.where(mx == r, ((g - b) / d) % 6, np.where(mx == g, (b - r) / d + 2, (r - g) / d + 4)) * 60
         yy, xx = np.mgrid[0:h, 0:w]
         # Zone de l'arme (bas droite) et centre de l'écran ; on ignore les bords (HUD, minimap).
-        poids_zone = (np.exp(-(((xx / w - 0.66) / 0.25) ** 2 + ((yy / h - 0.72) / 0.25) ** 2))
-                      + 0.5 * np.exp(-(((xx / w - 0.5) / 0.3) ** 2 + ((yy / h - 0.5) / 0.3) ** 2)))
+        if vue_fps:
+            poids_zone = (np.exp(-(((xx / w - 0.66) / 0.25) ** 2 + ((yy / h - 0.72) / 0.25) ** 2))
+                          + 0.5 * np.exp(-(((xx / w - 0.5) / 0.3) ** 2 + ((yy / h - 0.5) / 0.3) ** 2)))
+        else:
+            poids_zone = np.exp(-(((xx / w - 0.5) / 0.32) ** 2 + ((yy / h - 0.55) / 0.35) ** 2))
         poids_zone[: int(h * 0.12)] = 0
         # Murs des maps (beiges, oranges, rouges ternes) : ignorés sauf couleur très franche.
         # Les skins et les abilities (bleu, violet, cyan, rouge vif) comptent davantage.
         chaud = (hue < 60) | (hue > 340)
         terne = chaud & ((s < 0.72) | (v < 0.45))
         froid = (hue >= 160) & (hue <= 320)
-        poids_teinte = np.where(terne, 0.0, np.where(chaud, 0.6, np.where(froid, 1.6, 1.0)))
+        if murs_chauds:
+            poids_teinte = np.where(terne, 0.0, np.where(chaud, 0.6, np.where(froid, 1.6, 1.0)))
+        else:
+            # Pas de skins : la couleur du monde du jeu (herbe, ciel, carrosserie) compte telle quelle,
+            # les tons ternes un peu moins.
+            poids_teinte = np.where(terne, 0.5, 1.0)
         p = np.clip((s - 0.38) / 0.4, 0, 1) * np.clip((v - 0.12) / 0.3, 0, 1) * poids_zone * poids_teinte
         hist += np.bincount(((hue.astype(int) // 10) % 36).ravel(), weights=p.ravel(), minlength=36)[:36]
         total += float(poids_zone.sum())
@@ -139,14 +149,32 @@ def preparer(segments, r, log=print) -> None:
             img = _image(s.moment.clip, s.moment.t - 0.15)
             if img is not None:
                 images.append(img)
-        teinte = teinte_dominante(images)
+        try:
+            from jeux import profil as profil_jeu
+            pj = profil_jeu(segments[0].moment.clip) if segments else None
+        except Exception:
+            pj = None
+        teinte = teinte_dominante(images, vue_fps=pj.vue_fps if pj else True,
+                                  murs_chauds=pj.murs_chauds if pj else True)
         if teinte is None:
             p = dict(_PRESETS["glace"])
             log("  look auto : pas de couleur dominante nette, look « glace »")
         else:
             p = preset_depuis_teinte(teinte)
+            if pj is not None and not pj.vue_fps:
+                # Jeux sans arme à l'écran (Minecraft, courses…) : la teinte dominante est celle du monde
+                # (herbe, bois, ciel) ; la pousser encore donne une image jaune ou verte délavée.
+                # Étalonnage doux : contraste et couleurs à peine relevés, teintes divisées par 3.
+                p.update(contraste=1.08, saturation=1.08, gamma=1.0,
+                         hautes=tuple(c / 3 for c in p["hautes"]), moyens=tuple(c / 3 for c in p["moyens"]),
+                         ombres=(-0.015, 0.0, 0.02))
             log(f"  look auto : couleur dominante {p['accent']} (teinte {teinte:.0f}°)")
     r._look_pret = p
+    try:
+        if pj is not None and not pj.vue_fps and getattr(r, "bloom", 0.4) > 0.2:
+            r.bloom = 0.2      # images souvent très claires (ciel, neige, night vision) : halo léger
+    except NameError:
+        pass
     if not getattr(r, "accent", ""):
         r.accent = p["accent"]
 
@@ -169,14 +197,14 @@ def couleurs(r) -> tuple[str, str] | None:
     return eq, curves
 
 
-def chaine_finition(r, entree: str, sortie: str) -> str:
+def chaine_finition(r, entree: str, sortie: str, force: float | None = None) -> str:
     """Bloom sur les hautes lumières + vignette légère + grain fin (optionnel).
     Le halo est calculé en petit (1/4), puis ajouté en YUV : écran sur la luminance, et sa couleur
     ajoutée à la chrominance (grainmerge). Retourne un morceau de graphe « [entree]…[sortie] »."""
     W, H = r.largeur, r.hauteur
     bw, bh = max(2, (W // 4) // 2 * 2), max(2, (H // 4) // 2 * 2)
     sigma = max(4, min(W, H) / 4 / 22)
-    force = getattr(r, "bloom", 0.4)
+    force = getattr(r, "bloom", 0.4) if force is None else force
     g = (f"[{entree}]format=yuv420p,split=2[lk_a][lk_b];"
          f"[lk_b]scale={bw}:{bh}:flags=bilinear,eq=saturation=1.7,format=gbrp,colorlevels=rimin=0.74:gimin=0.74:bimin=0.74,"
          f"gblur=sigma={sigma:.1f},format=yuv420p,scale={W}:{H}:flags=bilinear[lk_h];"

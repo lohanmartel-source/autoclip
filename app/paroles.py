@@ -586,6 +586,7 @@ class Groupe:
     importance: float = 0.5    # 0-1 : taille du texte
     place: str = ""
     fiable: bool = False       # masque de l'arme assez sûr pendant ce groupe
+    centre_ia: tuple | None = None   # place trouvée derrière l'arme découpée par IA (arme_ia.py)
 
 
 def _petit(mot: str) -> bool:
@@ -684,15 +685,20 @@ PLACES_PORTRAIT = {
 }
 RETICULE = (0.38, 0.36, 0.62, 0.64)          # x0, y0, x1, y1 : zone interdite (paysage)
 RETICULE_PORTRAIT = (0.30, 0.42, 0.70, 0.58)
+# Derrière l'arme découpée par IA (Pro) : mot plus gros, centré-bas, juste derrière l'arme (refs).
+# Le centre exact est cherché autour de ce point (voir _centre_derriere_arme).
+ARME_IA_PAYSAGE = (0.50, 0.78, 0.46, 0.20)
+ARME_IA_PORTRAIT = (0.48, 0.68, 0.80, 0.14)
 
 
-def placer(groupes: list[Groupe], paysage: bool) -> None:
-    """Alterne les emplacements (jamais deux fois de suite le même) ; « arme » seulement si fiable."""
+def placer(groupes: list[Groupe], paysage: bool, ia: bool = False) -> None:
+    """Alterne les emplacements (jamais deux fois de suite le même) ; « arme » seulement si fiable.
+    `ia` : arme découpée par IA, chaque groupe qui a trouvé sa place derrière l'arme y va (refs)."""
     cycle = ["gauche", "droite", "haut", "bas"] if paysage else ["haut", "bas", "haut2"]
     k = 0
     precedent = ""
     for g in groupes:
-        if g.fiable and precedent != "arme" and g.importance >= 0.5:
+        if (g.centre_ia is not None) if ia else (g.fiable and precedent != "arme" and g.importance >= 0.5):
             g.place = "arme"
         else:
             g.place = cycle[k % len(cycle)]
@@ -743,9 +749,10 @@ def _preparer(alpha: np.ndarray) -> Sprite:
     return Sprite(a, glow.astype(np.float32), ombre.astype(np.float32), [f.astype(np.float32) for f in flous], cx, cy)
 
 
-def preparer_sprites(groupes: list[Groupe], zone_l: int, zone_h: int, dossier: Path) -> dict:
+def preparer_sprites(groupes: list[Groupe], zone_l: int, zone_h: int, dossier: Path,
+                     places: dict | None = None) -> dict:
     """Un sprite par (texte, emplacement) : taille selon l'emplacement et l'importance."""
-    places = PLACES_PAYSAGE if zone_l > zone_h else PLACES_PORTRAIT
+    places = places or (PLACES_PAYSAGE if zone_l > zone_h else PLACES_PORTRAIT)
     cles = sorted({(g.texte, g.place, round(g.importance, 1)) for g in groupes})
     if not cles:
         return {}
@@ -1041,6 +1048,138 @@ def analyser(images: np.ndarray, coupes_donnees: list[int] | None = None, pas: i
     return Analyse(lisse, cle, camera, conf, coupes, couleur_dominante(images), lumiere, fiab)
 
 
+def _images_groupe(g: Groupe, fps: float, T: int) -> tuple[int, int]:
+    """Images [a, b) où le groupe est affiché (au moins 3 images, comme dans incruster)."""
+    a = max(0, int(np.ceil(g.debut * fps - 1e-6)))
+    b = int(np.ceil(g.fin * fps - 1e-6))
+    return a, min(T, max(b, a + 3))
+
+
+def _arme_ia(video: Path, groupes: list[Groupe], an: Analyse, T: int, fps: float, zone, paysage: bool,
+             places: dict, log=print):
+    """Découpe l'arme par IA pendant l'affichage des mots (arme_ia.py), puis cherche pour chaque groupe
+    une place juste derrière l'arme. `g.fiable` = masque sûr sur TOUTES les images du groupe ;
+    `g.centre_ia` = centre trouvé (sinon le groupe garde le placement habituel). None : IA indisponible."""
+    try:
+        import arme_ia
+    except Exception as e:
+        log(f"  paroles : découpage de l'arme par IA indisponible ({type(e).__name__})")
+        return None
+    plan_image = np.zeros(T, int)
+    for k, c in enumerate(an.coupes):
+        plan_image[c:] = k
+    cles: set[int] = set()
+    for g in groupes:
+        a, b = _images_groupe(g, fps, T)
+        cles.update(range(a, b, arme_ia.PAS))
+        cles.add(b - 1)
+        for c in an.coupes:                    # un plan qui commence pendant le groupe : ses 2 bords
+            if a < c < b:
+                cles.update((c - 1, c))
+    try:
+        ia = arme_ia.segmenter(video, zone, paysage, T, sorted(cles), plan_image, log)
+    except Exception as e:
+        log(f"  paroles : découpage de l'arme par IA impossible ({type(e).__name__}: {str(e)[:160]})")
+        return None
+    if ia is None:
+        return None
+    bilan = []
+    for g in groupes:
+        a, b = _images_groupe(g, fps, T)
+        couverts = [ia.couvert(t) for t in range(a, b)]
+        g.fiable = all(couverts)
+        g.centre_ia = None
+        bilan.append([g.texte, round(float(np.mean(couverts)), 2), False])
+    ia.stats["groupes"] = bilan
+    candidats = [g for g in groupes if g.fiable]
+    if not candidats:
+        return ia
+    for g in candidats:
+        g.place = "arme"
+    zx, zy, zl, zh = zone
+    dossier = Path(tempfile.mkdtemp(prefix="autoclip_paroles_"))
+    try:
+        sprites = preparer_sprites(candidats, zl, zh, dossier, places)
+    finally:
+        shutil.rmtree(dossier, ignore_errors=True)
+    for g in candidats:
+        sp = sprites.get((g.texte, g.place, round(g.importance, 1)))
+        if sp is not None:
+            g.centre_ia = _centre_derriere_arme(sp, g, ia, fps, T, zone, paysage)
+            bilan[groupes.index(g)][2] = g.centre_ia is not None
+        g.place = ""
+    return ia
+
+
+def _centre_derriere_arme(sp: Sprite, g: Groupe, ia, fps: float, T: int, zone, paysage: bool):
+    """Centre (x, y) du mot pour que l'arme passe DEVANT une partie des lettres (environ 15 %) sans
+    le rendre illisible ; jamais sur le réticule. None si aucune place ne convient."""
+    zx, zy, zl, zh = zone
+    a, b = _images_groupe(g, fps, T)
+    ts = [int(t) for t in ia.cles if a <= t < b] or [a]
+    gl = 192
+    gh = max(8, int(round(gl * zh / zl)))
+    Ms = [m for m in (ia.masque_bas(t, gl, gh) for t in ts) if m is not None]
+    if not Ms:
+        return None
+    M = np.stack(Ms).astype(np.float32)
+    f = gl / zl
+    bt = _boite((sp.a * 255).astype(np.uint8), 40)
+    if not bt:
+        return None
+    lettres = sp.a[bt[0]:bt[1], bt[2]:bt[3]]
+    hl, wl = lettres.shape
+    ag = ndimage.zoom(lettres, (max(1, round(hl * f)) / hl, max(1, round(wl * f)) / wl), order=1)
+    ag = np.clip(ag, 0, 1)
+    hg, wg = ag.shape
+    total = float(ag.sum()) + 1e-6
+    # Une tranche par lettre (environ) : aucune lettre ne doit disparaître entièrement derrière l'arme
+    # (« CAL » au lieu de « CALL » se lit comme un mot coupé, pas comme un mot posé dans la scène).
+    n_tr = max(3, len(g.texte.replace(" ", "")))
+    bornes = np.linspace(0, wg, n_tr + 1).astype(int)
+    tranches = [(u, v) for u, v in zip(bornes[:-1], bornes[1:]) if v > u and ag[:, u:v].sum() > 0.2 * total / n_tr] or [(0, wg)]
+    Mp = np.pad(M, ((0, 0), (hg, hg), (wg, wg)))
+    # 16:9 : l'arme est grande et la zone interdite habituelle (réticule + ennemi) très large ; ici
+    # on protège seulement le centre, sinon aucun mot ne peut passer derrière l'arme.
+    rx0, ry0, rx1, ry1 = (0.42, 0.38, 0.58, 0.62) if paysage else RETICULE_PORTRAIT
+    limite_lettre = 0.6 if paysage else 0.5
+    px, py = (ARME_IA_PAYSAGE if paysage else ARME_IA_PORTRAIT)[:2]
+    xs = np.linspace(0.20, 0.80, 25) if paysage else np.linspace(0.30, 0.70, 17)
+    ys = np.linspace(0.50, 0.90, 17) if paysage else np.linspace(0.56, 0.86, 13)
+    meilleur = None
+    # 1er essai : arme devant ~17 % des lettres, aucune lettre cachée à plus de 50-60 %. Sinon, 2e essai
+    # plus permissif (mot long, arme très grande) : toujours lisible, mais plus caché.
+    for moy_min, pire_max, lettre_max in ((0.06, 0.38, limite_lettre), (0.04, 0.50, limite_lettre + 0.15)):
+        if meilleur is not None:
+            break
+        for cyn in ys:
+            for cxn in xs:
+                x0n, x1n = cxn - wl / 2 / zl, cxn + wl / 2 / zl
+                y0n, y1n = cyn - hl / 2 / zh, cyn + hl / 2 / zh
+                if x0n < 0.02 or x1n > 0.98 or y0n < 0.02 or y1n > 0.97:
+                    continue
+                if x0n < rx1 and x1n > rx0 and y0n < ry1 and y1n > ry0:
+                    continue
+                gx, gy = int(round(x0n * gl)) + wg, int(round(y0n * gh)) + hg
+                fen = Mp[:, gy:gy + hg, gx:gx + wg] * ag
+                occ = fen.sum(axis=(1, 2)) / total
+                moy, pire = float(occ.mean()), float(occ.max())
+                if moy < moy_min or pire > pire_max or float(occ.min()) < 0.02:
+                    continue
+                fen_m = fen.mean(axis=0)
+                lettre = max(float(fen_m[:, u:v].sum() / (ag[:, u:v].sum() + 1e-6)) for u, v in tranches)
+                if lettre > lettre_max:
+                    continue
+                note = -3.0 * abs(moy - 0.17) - 1.5 * max(0.0, lettre - 0.3) - np.hypot(cxn - px, (cyn - py) * 1.3)
+                if meilleur is None or note > meilleur[0]:
+                    meilleur = (note, cxn, cyn)
+    if meilleur is None:
+        return None
+    _, cxn, cyn = meilleur
+    # Centre du sprite = centre des lettres (comme le placement habituel).
+    return (zx + cxn * zl, zy + cyn * zh)
+
+
 # ─────────────────────────────── 4. Composition ───────────────────────────────
 
 def _matrice_interp(n_out: int, debut: float, pas: float, n_in: int) -> np.ndarray:
@@ -1076,9 +1215,10 @@ def _ffprobe_video(chemin: Path) -> tuple[int, int, float, int]:
 def incruster(video: Path, sortie: Path, mots: list[Mot], cadrage: str = "crop", couleur: str = "",
               coupes: list[float] | None = None, exclus: list[tuple[float, float]] | None = None,
               fondu_fin: float = 0.6, qualite: str = "finale", log=print, debug_masque: bool = False,
-              style: str = "neon") -> dict:
+              style: str = "neon", arme_ia: bool = False) -> dict:
     """Compose les paroles dans la vidéo : groupes de mots placés autour du réticule, derrière
-    l'arme quand le masque est fiable. Retourne des stats (temps, groupes affichés)."""
+    l'arme quand le masque est fiable. Retourne des stats (temps, groupes affichés).
+    `arme_ia` (Pro) : l'arme et les mains sont découpées par IA (arme_ia.py) au lieu de l'heuristique."""
     t0 = time.time()
     W, H, fps, T = _ffprobe_video(video)
     zx, zy, zl, zh = zone_jeu(W, H, cadrage)
@@ -1109,14 +1249,19 @@ def incruster(video: Path, sortie: Path, mots: list[Mot], cadrage: str = "crop",
         if b > a and an.fiabilite is not None:
             g.fiable = bool(np.percentile(an.fiabilite[an.cle[a:b]], 10) >= 0.5)
         groupes.append(g)
-    placer(groupes, paysage)
+    places = PLACES_PAYSAGE if paysage else PLACES_PORTRAIT
+    ia = None
+    if arme_ia and groupes:
+        places = dict(places, arme=ARME_IA_PAYSAGE if paysage else ARME_IA_PORTRAIT)
+        ia = _arme_ia(video, groupes, an, T, fps, (zx, zy, zl, zh), paysage, places, log)
+    t_ia = time.time() - t0 - t_analyse
+    placer(groupes, paysage, ia=ia is not None)
     dossier = Path(tempfile.mkdtemp(prefix="autoclip_paroles_"))
     try:
-        sprites = preparer_sprites(groupes, zl, zh, dossier)
+        sprites = preparer_sprites(groupes, zl, zh, dossier, places)
     finally:
         shutil.rmtree(dossier, ignore_errors=True)
-    t_sprites = time.time() - t0 - t_analyse
-    places = PLACES_PAYSAGE if paysage else PLACES_PORTRAIT
+    t_sprites = time.time() - t0 - t_analyse - t_ia
     rx0, ry0, rx1, ry1 = RETICULE if paysage else RETICULE_PORTRAIT
     rx0, rx1 = zx + rx0 * zl, zx + rx1 * zl
     ry0, ry1 = zy + ry0 * zh, zy + ry1 * zh
@@ -1125,6 +1270,9 @@ def incruster(video: Path, sortie: Path, mots: list[Mot], cadrage: str = "crop",
     for i, g in enumerate(groupes):
         sp = sprites.get((g.texte, g.place, round(g.importance, 1)))
         if sp is None:
+            continue
+        if g.place == "arme" and g.centre_ia is not None:
+            centres[i] = g.centre_ia
             continue
         bt = _boite((sp.a * 255).astype(np.uint8), 40)
         wl, hl = (bt[3] - bt[2], bt[1] - bt[0]) if bt else sp.a.shape[::-1]
@@ -1148,15 +1296,15 @@ def incruster(video: Path, sortie: Path, mots: list[Mot], cadrage: str = "crop",
     teintes = _teintes(style, col)
     echx, echy = zl / lw, zh / lh
 
-    preset, crf = ("ultrafast", "22") if qualite == "apercu" else ("superfast", "18")
+    from outils import args_encodage   # libx264 ou carte graphique (Rendu GPU)
     tmp = Path(sortie).with_name(Path(sortie).stem + "_paroles_tmp.mp4")
     lecteur = subprocess.Popen(["ffmpeg", "-v", "error", "-i", str(video), "-f", "rawvideo",
                                 "-pix_fmt", "rgb24", "pipe:1"], stdout=subprocess.PIPE,
                                stderr=subprocess.DEVNULL, creationflags=_FLAGS, bufsize=W * H * 3)
     ecrivain = subprocess.Popen(["ffmpeg", "-y", "-v", "error", "-f", "rawvideo", "-pix_fmt", "rgb24",
                                  "-s", f"{W}x{H}", "-r", f"{fps:g}", "-i", "pipe:0", "-i", str(video),
-                                 "-map", "0:v", "-map", "1:a?", "-c:a", "copy", "-c:v", "libx264",
-                                 "-preset", preset, "-crf", crf, "-pix_fmt", "yuv420p",
+                                 "-map", "0:v", "-map", "1:a?", "-c:a", "copy",
+                                 *args_encodage("rapide_apercu" if qualite == "apercu" else "rapide"),
                                  "-movflags", "+faststart", str(tmp)],
                                 stdin=subprocess.PIPE, stderr=subprocess.PIPE, creationflags=_FLAGS)
     taille = W * H * 3
@@ -1166,6 +1314,7 @@ def incruster(video: Path, sortie: Path, mots: list[Mot], cadrage: str = "crop",
     suivi = np.zeros(2, np.float32)
     dernier = -1
     affiches = set()
+    caches: dict[int, list[float]] = {}      # part des lettres cachée par l'arme, image par image
     try:
         for t in range(T):
             lu = 0
@@ -1202,8 +1351,10 @@ def incruster(video: Path, sortie: Path, mots: list[Mot], cadrage: str = "crop",
                 if t / fps > fin_mots - fondu_fin:
                     opa *= max(0.0, (fin_mots - t / fps) / fondu_fin)
                 if opa > 0.01:
-                    _composer(image, sp, (centres[i][0] + dx, centres[i][1] + dy), age, opa, teintes,
-                              an if g.fiable else None, t, (zx, zy, zl, zh), (lw, lh), debug_masque)
+                    cache = _composer(image, sp, (centres[i][0] + dx, centres[i][1] + dy), age, opa, teintes,
+                                      an if g.fiable and ia is None else None, t, (zx, zy, zl, zh), (lw, lh),
+                                      debug_masque, ia if g.fiable else None)
+                    caches.setdefault(i, []).append(cache)
                     affiches.add(i)
             ecrivain.stdin.write(tampon)
     finally:
@@ -1219,7 +1370,11 @@ def incruster(video: Path, sortie: Path, mots: list[Mot], cadrage: str = "crop",
         tmp.unlink(missing_ok=True)
         raise RuntimeError(erreur[-400:])
     tmp.replace(sortie)
+    # Groupe « derrière l'arme » : au moins 4 % des lettres cachées pendant la moitié de son affichage.
+    derriere = [i for i, v in caches.items() if np.mean(np.array(v) >= 0.04) >= 0.5]
     return {"secondes": time.time() - t0, "analyse": t_analyse, "sprites": t_sprites, "duree": duree,
+            "ia": t_ia if ia is not None else None, "ia_stats": ia.stats if ia is not None else None,
+            "derriere": len(derriere), "derriere_textes": [groupes[i].texte for i in derriere],
             "mots": len(affiches), "groupes": [(g.texte, g.place, g.fiable) for g in groupes],
             "couleur": "#" + "".join(f"{int(c * 255):02x}" for c in col)}
 
@@ -1228,9 +1383,10 @@ _LUMA = np.array([0.299, 0.587, 0.114], np.float32)
 
 
 def _composer(image, sp: Sprite, centre, age, opa, teintes, an: Analyse | None, t, zone, basse,
-              debug_masque=False):
+              debug_masque=False, ia=None) -> float:
     """Halo + ombre + lettres translucides qui prennent la texture de la scène ; derrière l'arme
-    seulement si `an` est donné (masque jugé fiable pour ce groupe)."""
+    seulement si `an` est donné (masque jugé fiable pour ce groupe), ou `ia` (masque découpé par IA,
+    contour net en pleine définition). Retourne la part des lettres cachée par l'arme."""
     zx, zy, zl, zh = zone
     lw, lh = basse
     H, W = image.shape[:2]
@@ -1242,10 +1398,13 @@ def _composer(image, sp: Sprite, centre, age, opa, teintes, an: Analyse | None, 
     ax, ay = max(0, x0), max(0, y0)
     bx, by = min(W, x0 + w), min(H, y0 + h)
     if bx <= ax or by <= ay:
-        return
+        return 0.0
     sy, sx = slice(ay - y0, by - y0), slice(ax - x0, bx - x0)
     a, glow, ombre = a[sy, sx], sp.glow[sy, sx], sp.ombre[sy, sx]
     k = None
+    if ia is not None:
+        k = ia.masque(t, ax, ay, bx, by)
+        an = None
     if an is not None:
         M = an.masques[an.cle[min(t, len(an.cle) - 1)]]
         gy0, gy1 = (ay - zy) * lh / zh, (by - zy) * lh / zh
@@ -1272,13 +1431,14 @@ def _composer(image, sp: Sprite, centre, age, opa, teintes, an: Analyse | None, 
         z[..., 0] = np.maximum(z[..., 0], k * 150)
     np.clip(z + 0.5, 0, 255, out=z)
     image[ay:by, ax:bx] = z
+    return float((a * k).sum() / max(1e-6, float(a.sum()))) if k is not None else 0.0
 
 
 # ─────────────────────────────── Branchement ───────────────────────────────
 
 def appliquer(video: Path, musique: Path, debut_musique: float, duree: float, cadrage: str = "crop",
               chanson: str = "", lrc: str = "", couleur: str = "", segments=None, fps: int = 30,
-              qualite: str = "finale", log=print, decalage: float = 0.0) -> bool:
+              qualite: str = "finale", log=print, decalage: float = 0.0, arme_ia: bool = False) -> bool:
     """Passe « paroles dans le décor » sur un montage fini. Ne lève jamais : sans paroles
     (ou en cas de problème) le montage reste tel quel et on l'explique dans le journal."""
     try:
@@ -1302,8 +1462,8 @@ def appliquer(video: Path, musique: Path, debut_musique: float, duree: float, ca
                     exclus.append((d, d + s.images_totales / fps))
         log(f"  paroles dans le décor : composition de {len(mots)} mots…")
         st = incruster(Path(video), Path(video), mots, cadrage=cadrage, couleur=couleur, coupes=coupes,
-                       exclus=exclus, qualite=qualite, log=log)
-        derriere = sum(1 for _, place, _f in st["groupes"] if place == "arme")
+                       exclus=exclus, qualite=qualite, log=log, arme_ia=arme_ia)
+        derriere = st["derriere"]
         log(f"  paroles : {st['mots']} groupes de mots affichés ({derriere} derrière l'arme), "
             f"couleur {st['couleur']}, {st['secondes']:.1f} s pour {st['duree']:.1f} s de vidéo")
         return True

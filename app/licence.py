@@ -98,6 +98,13 @@ def fonctions_pro_demandees(o) -> list[str]:
         res.append("le 60 images/s")
     if o.jeux and any(not est_jeu_gratuit(j) for j in o.jeux):
         res.append("les autres jeux que Valorant")
+    # 1.4.0
+    if getattr(o, "modele", ""):
+        res.append("les modèles d'edits")
+    if getattr(o, "arme_ia", False):
+        res.append("les paroles derrière l'arme (IA)")
+    if getattr(o, "encodeur_gpu", False):
+        res.append("le rendu accéléré par la carte graphique")
     return res
 
 
@@ -107,8 +114,13 @@ def appliquer(o):
     if est_pro():
         return o
     jeux = [j for j in (o.jeux or []) if est_jeu_gratuit(j)] or ["Valorant"]
-    return replace(o, format="vertical" if o.format == "youtube" else o.format, versions=1,
-                   fps=30, jeux=jeux, marque=True)
+    o = replace(o, format="vertical" if o.format == "youtube" else o.format, versions=1,
+                fps=30, jeux=jeux, marque=True)
+    # 1.4.0 : fonctions Pro remises à zéro en gratuit (les champs n'existent pas forcément).
+    for champ, gratuit in (("modele", ""), ("arme_ia", False), ("encodeur_gpu", False)):
+        if hasattr(o, champ):
+            o = replace(o, **{champ: gratuit})
+    return o
 
 
 def creer_code(graine: bytes, expire: date, nom: str = "", debut: date | None = None) -> str:

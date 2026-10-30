@@ -28,7 +28,7 @@ from rendu import Rendu, assembler, debuts_plans, miniature, miniatures, rendre_
 
 EXTENSIONS = {".mp4", ".mov", ".mkv", ".webm", ".avi"}
 # Sous-dossiers de Medal qui ne contiennent pas de clips de jeu.
-DOSSIERS_IGNORES = {"temp", "thumbnails", "screenshots", "reels", "databases", "autoclip"}
+DOSSIERS_IGNORES = {"temp", "thumbnails", "screenshots", "reels", "databases", "autoclip", "edits"}  # edits : exports de l'éditeur Medal
 POLICES = [
     "C:/Windows/Fonts/impact.ttf", "C:/Windows/Fonts/arialbd.ttf",
     "/System/Library/Fonts/Supplemental/Impact.ttf", "/Library/Fonts/Arial Bold.ttf",
@@ -93,6 +93,9 @@ class Options:
     lrc: str = ""                    # fichier .lrc ou texte LRC collé (prioritaire)
     couleur_paroles: str = ""        # couleur des paroles (#rrggbb) ; vide = couleur dominante du montage
     decalage_paroles: float = 0.0    # réglage fin manuel des paroles, en secondes (-0,5 à +0,5 ; + = plus tard)
+    modele: str = ""                 # modèle d'edit (Pro) : paroles_16_9, showcase_skin, phonk_rapide, cine (modeles.py)
+    encodeur_gpu: bool = False       # rendu accéléré par la carte graphique (Pro) : NVENC, AMF ou Quick Sync
+    arme_ia: bool = False            # paroles derrière l'arme et les mains découpées par IA (Pro, arme_ia.py)
 
 
 def lister_clips(sources: list[str], derniers: int = 0) -> list[Path]:
@@ -257,11 +260,20 @@ def _preparer(o: Options, log) -> dict:
             moments += par_son
     if not moments:
         raise ErreurAutoclip("Aucun clip exploitable.")
+    # Sans kills (moments forts trouvés au son et au mouvement), il faut un peu plus de matière :
+    # avec 2 clips, le montage montrerait 3 ou 4 fois la même scène.
+    minimum, min_clips = (4, 2) if any(m.etiquette for m in moments) else (6, 3)
+    if o.mode == "kills" and not selection and (len({m.clip for m in moments}) < min_clips or len(moments) < minimum):
+        jeux = ", ".join(sorted({nom_jeu(m.clip) for m in moments}))
+        raise ErreurAutoclip(f"Trop peu de matière pour un montage : {len({m.clip for m in moments})} clip(s) "
+                             f"et {len(moments)} moment(s) fort(s) ({jeux}). Il faut au moins {min_clips} clips et "
+                             f"{minimum} moments : enregistre d'autres clips, ou choisis plusieurs jeux ensemble.")
     if o.reactions:
         moments = bonus_voix(moments, log)
     log(f"  {len(moments)} moment(s) d'action retenu(s)")
 
-    combien = _nb_chapitres(o) if o.format == "youtube" else max(1, o.versions)
+    import modeles
+    combien = _nb_chapitres(o) if o.format == "youtube" and not modeles.est_court_16_9(o) else max(1, o.versions)
     chansons = _chansons(o, log, combien)
     seqs = []
     if o.sequences and o.filtre in ("tous", "multi", "ace") and avec_evts and not o.armes:
@@ -288,7 +300,9 @@ def _chansons(o: Options, log, combien: int) -> list[Path]:
         if not chansons:
             raise ErreurAutoclip("Les musiques de l'aperçu sont introuvables.")
     elif source_musique.is_dir():
-        chansons = choisir_musiques(source_musique, 30 if o.format == "youtube" else o.duree, combien, log)
+        import modeles
+        court = modeles.est_court_16_9(o)
+        chansons = choisir_musiques(source_musique, 30 if o.format == "youtube" and not court else o.duree, combien, log)
         if not chansons:
             raise ErreurAutoclip(f"Aucune chanson utilisable dans {source_musique}")
     elif source_musique.is_file():
@@ -307,11 +321,15 @@ def _rendu_de(o: Options) -> Rendu:
         W, H = (960, 540) if o.apercu else (1920, 1080)
     else:
         W, H = (540, 960) if o.apercu else (1080, 1920)
-    return Rendu(largeur=pair(W), hauteur=pair(H), fps=o.fps, cadrage=o.cadrage,
+    r = Rendu(largeur=pair(W), hauteur=pair(H), fps=o.fps, cadrage=o.cadrage,
                  qualite="apercu" if o.apercu else "finale", police=trouver_police(),
                  textes_kills=o.textes_kills, style=o.style, filigrane=o.filigrane,
                  caster=o.caster, instrumental=o.instrumental, gel=o.arret_image, marque=o.marque,
-                 look=o.look)
+                 look=o.look, modele=o.modele)
+    if o.modele:
+        import modeles
+        modeles.regler_rendu(r, o.modele)
+    return r
 
 
 def _afficher_plan(segments, duree, chanson, rythme, fps, log):
@@ -349,7 +367,7 @@ def _rendre(o: Options, r: Rendu, segments, musique, debut_musique, duree, sorti
             paroles_dans_le_decor(sortie_v, musique.chemin, debut_musique, duree, cadrage=r.cadrage,
                                   chanson=o.titre_chanson if Path(o.musique).is_file() else "",
                                   lrc=o.lrc, couleur=o.couleur_paroles or getattr(r, "accent", "") or "", segments=segments, fps=o.fps,
-                                  qualite=r.qualite, log=log, decalage=o.decalage_paroles)
+                                  qualite=r.qualite, log=log, decalage=o.decalage_paroles, arme_ia=o.arme_ia)
         if o.miniature:
             if miniatures(segments, r, sortie_v, texte, temp):
                 log(f"  3 miniatures au choix : {sortie_v.stem}_mini1..3.jpg")
@@ -399,6 +417,16 @@ def generer(o: Options, log=print, plan_seulement: bool = False) -> list[Path]:
     debut_chrono = time.time()
     verifier_ffmpeg()
     o = licence.appliquer(o)            # version gratuite : Valorant, vertical, 1 version, 30 i/s, marque
+    import modeles
+    import outils
+    if o.modele and not modeles.get(o.modele):
+        o = dc_replace(o, modele="")
+    if o.modele:
+        log(f"  modèle : {modeles.get(o.modele)['nom']}")
+    enc = outils.regler_gpu(o.encodeur_gpu)
+    if o.encodeur_gpu:
+        log(f"  rendu GPU : {outils.NOMS_ENCODEURS.get(enc, enc)}"
+            + ("" if enc != "libx264" else " (aucune carte graphique compatible trouvée)"))
     if o.paroles:
         # Paroles dans le décor : pas de textes de kill, de compteur ni de sous-titres du micro en plus
         # (l'image respire, et deux textes à la fois se lisent mal).
@@ -416,6 +444,11 @@ def generer(o: Options, log=print, plan_seulement: bool = False) -> list[Path]:
     sortie.parent.mkdir(parents=True, exist_ok=True)
     ctx = _preparer(o, log)
     moments, chansons, seqs, source_musique = ctx["moments"], ctx["chansons"], ctx["seqs"], ctx["source_musique"]
+    if o.mode == "kills" and not any(m.etiquette for m in moments):
+        # Jeux où Medal n'enregistre pas de kills (Minecraft, courses…) : montage « moments forts »
+        # (pics du son, action, mouvement). Pas de compteur de kills, de caster ni d'arrêt sur image.
+        log("  pas de kills enregistrés par Medal : montage « moments forts » (son, action, mouvement)")
+        o = dc_replace(o, compteur=False, caster="", arret_image=False)
     r = _rendu_de(o)
     profil = None
     if o.profil:
@@ -425,7 +458,7 @@ def generer(o: Options, log=print, plan_seulement: bool = False) -> list[Path]:
             log(f"  style copié : {profil['nom']} (plans de {profil['duree_plan']} s, {int(profil['flash'] * 100)} % de flashs)")
     graine0 = o.graine if o.graine is not None else random.randrange(1_000_000)
     texte = _texte_sans_emoji(o.texte) if o.texte else ""
-    if o.format == "youtube":
+    if o.format == "youtube" and not modeles.est_court_16_9(o):
         return _generer_youtube(o, ctx, r, graine0, sortie, texte, log, plan_seulement, debut_chrono, profil)
 
     analyses_musique: dict[Path, object] = {}
@@ -461,7 +494,7 @@ def generer(o: Options, log=print, plan_seulement: bool = False) -> list[Path]:
         segments, debut_musique, duree = planifier(musique, moments_v, o.fps, rythme_v, o.ralenti,
                                                    graine0 + 101 * v, sequence=sequence, hook=o.hook,
                                                    style=o.style, gel=o.arret_image, profil=profil,
-                                                   intro_3d=o.intro_3d)
+                                                   intro_3d=o.intro_3d, modele=o.modele)
         drops_utilises.update(s.moment.clip for s in segments if s.role == "drop")
         if not rendre_celle_ci:
             continue
@@ -524,7 +557,7 @@ def _generer_youtube(o: Options, ctx: dict, r: Rendu, graine0: int, sortie: Path
                                                        graine0 + 101 * c, sequence=sequence,
                                                        hook=o.hook and c == 0, style=o.style,
                                                        gel=o.arret_image, profil=profil,
-                                                       intro_3d=o.intro_3d)
+                                                       intro_3d=o.intro_3d, modele=o.modele)
             for s in segments:
                 if s.role not in ("hook", "rewind", "intro3d"):
                     utilises.add((s.moment.clip, round(s.moment.t, 1)))
@@ -581,9 +614,9 @@ def _enchainer(chapitres: list[tuple[Path, float]], sortie: Path, r: Rendu, fond
         parties.append(f"[{ca}][{i}:a]acrossfade=d={fondu}[a{i}]")
         cv, ca = f"v{i}", f"a{i}"
         longueur += chapitres[i][1] - fondu
-    preset, crf = ("veryfast", "23") if r.qualite == "apercu" else ("medium", "18")
+    from outils import args_encodage
     executer(cmd + ["-filter_complex", ";".join(parties), "-map", f"[{cv}]", "-map", f"[{ca}]",
-                    "-c:v", "libx264", "-preset", preset, "-crf", crf, "-pix_fmt", "yuv420p", "-r", str(r.fps),
+                    *args_encodage("apercu" if r.qualite == "apercu" else "finale"), "-r", str(r.fps),
                     "-c:a", "aac", "-b:a", "192k", "-movflags", "+faststart", str(sortie)])
 
 
@@ -651,7 +684,27 @@ def main(argv=None) -> int:
     ap.add_argument("--lrc", default="", metavar="FICHIER", help="Paroles synchronisées (.lrc) à utiliser")
     ap.add_argument("--decalage-paroles", type=float, default=0.0, metavar="SECONDES",
                     help="Réglage fin des paroles, de -0.5 à +0.5 s (+ = les mots apparaissent plus tard)")
+    ap.add_argument("--paroles-derriere-arme", action="store_true",
+                    help="Pro : paroles derrière l'arme et les mains, découpées par IA (active --paroles)")
+    import modeles
+    ap.add_argument("--modele", choices=list(modeles.MODELES), default="",
+                    help="Pro : modèle d'edit prêt (" + ", ".join(f"{k} = {m['nom']}" for k, m in modeles.MODELES.items())
+                    + "). Fixe format, durée, style, look, rythme… ; une option donnée à la main reste prioritaire")
+    ap.add_argument("--gpu", action="store_true",
+                    help="Pro : rendu accéléré par la carte graphique (NVIDIA NVENC, AMD AMF ou Intel Quick Sync)")
     a = ap.parse_args(argv)
+    if a.modele:
+        # Les réglages du modèle deviennent les valeurs par défaut, puis on relit la ligne de commande.
+        rg = modeles.MODELES[a.modele]["reglages"]
+        defauts = {k: rg[k] for k in ("duree", "format", "style", "look", "rythme", "fps", "ralenti") if k in rg}
+        if "paroles" in rg:
+            defauts["paroles"] = rg["paroles"]
+        for cle, opt in (("hook", "sans_hook"), ("intro_3d", "sans_intro_3d"), ("textes_kills", "sans_textes"),
+                         ("compteur", "sans_compteur")):
+            if cle in rg:
+                defauts[opt] = not rg[cle]
+        ap.set_defaults(**defauts)
+        a = ap.parse_args(argv)
     if a.best_of:
         import sessions
         return 0 if sessions.best_of(log=print) else 1
@@ -673,8 +726,10 @@ def main(argv=None) -> int:
                 sous_titres=not a.sans_sous_titres, miniature=not a.sans_miniature, depuis_jours=a.depuis,
                 format=a.format, style=a.style, look=a.look or ("auto" if a.style == "edit" else "aucun"), compteur=not a.sans_compteur, outro=a.outro,
                 effets_sonores=not a.sans_effets_sonores, armes=a.armes, agents=a.agents,
-                paroles=a.paroles or bool(a.lrc), titre_chanson=a.titre_chanson, lrc=a.lrc,
-                decalage_paroles=max(-0.5, min(0.5, a.decalage_paroles)))
+                paroles=a.paroles or bool(a.lrc) or a.paroles_derriere_arme, titre_chanson=a.titre_chanson, lrc=a.lrc,
+                decalage_paroles=max(-0.5, min(0.5, a.decalage_paroles)), arme_ia=a.paroles_derriere_arme,
+                modele=a.modele, encodeur_gpu=a.gpu,
+                arret_image=modeles.MODELES[a.modele]["reglages"].get("arret_image", True) if a.modele else True)
     if a.liste_jeux:
         for jeu, n in jeux_disponibles(a.clips).items():
             print(f"{jeu:30} {n} clip(s)")

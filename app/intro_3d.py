@@ -23,7 +23,7 @@ from pathlib import Path
 
 import numpy as np
 
-from outils import _FLAGS
+from outils import _FLAGS, args_encodage, est_gpu, signaler_echec_gpu
 
 LIME = np.array([198, 255, 61], np.float32)        # #c6ff3d
 FOND = np.array([12, 14, 11], np.float32)          # #0c0e0b
@@ -510,7 +510,23 @@ def rendre_intro(depart: np.ndarray, cartes: list[np.ndarray], cible: np.ndarray
                  fps: int, images: int, graine: int = 7, preset: str = "veryfast", crf: str = "16",
                  travailleurs: int | None = None) -> Path:
     """Rend l'intro (images à fps) dans un fichier vidéo au même format que les autres plans :
-    libx264, -r fps, son pcm_s16le 48 kHz stéréo (silence)."""
+    H.264 (libx264, ou la carte graphique en Rendu GPU), -r fps, son pcm_s16le 48 kHz stéréo (silence)."""
+    if (preset, crf) == ("veryfast", "16"):
+        encodage = args_encodage("plan")
+    else:
+        encodage = ["-c:v", "libx264", "-preset", preset, "-crf", crf, "-pix_fmt", "yuv420p"]
+    try:
+        return _rendre_intro(depart, cartes, cible, sortie, fps, images, graine, encodage, travailleurs)
+    except RuntimeError as e:
+        if not est_gpu(encodage):
+            raise
+        signaler_echec_gpu(str(e))        # la carte graphique a refusé : on refait avec libx264
+        return _rendre_intro(depart, cartes, cible, sortie, fps, images, graine, args_encodage("plan", False),
+                             travailleurs)
+
+
+def _rendre_intro(depart: np.ndarray, cartes: list[np.ndarray], cible: np.ndarray, sortie: Path,
+                  fps: int, images: int, graine: int, encodage: list[str], travailleurs: int | None) -> Path:
     H, W = depart.shape[:2]
     if cible.shape[:2] != (H, W):
         raise ValueError("la carte cible doit avoir la taille de l'écran")
@@ -553,7 +569,7 @@ def rendre_intro(depart: np.ndarray, cartes: list[np.ndarray], cible: np.ndarray
            "-f", "rawvideo", "-pix_fmt", "rgb24", "-s", f"{W}x{H}", "-r", str(fps), "-i", "-",
            "-f", "lavfi", "-i", "anullsrc=r=48000:cl=stereo",
            "-map", "0:v", "-map", "1:a", "-t", f"{duree:.4f}",
-           "-c:v", "libx264", "-preset", preset, "-crf", crf, "-pix_fmt", "yuv420p", "-r", str(fps),
+           *encodage, "-r", str(fps),
            "-c:a", "pcm_s16le", "-ar", "48000", str(sortie)]
     proc = subprocess.Popen(cmd, stdin=subprocess.PIPE, stdout=subprocess.DEVNULL, stderr=subprocess.PIPE,
                             creationflags=_FLAGS)

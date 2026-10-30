@@ -57,6 +57,11 @@ def legende(segments: list, o, graine: int = 0) -> str:
         titre = rng.choice(["4K, il en manquait un", "4K sans trembler"])
     elif "one tap" in etiquettes:
         titre = rng.choice(["Que des one taps", "One tap, next", "Une balle, un kill"])
+    elif "headshot" in etiquettes:
+        titre = rng.choice(["Que dans la tête", "Headshot, next", "Visée propre"])
+    elif not etiquettes.strip():
+        # Jeux sans kills (Minecraft, courses…) : montage « moments forts ».
+        titre = rng.choice(["Les meilleurs moments", "Que des moments forts", f"Best of {jeu}" if jeu else "Best of"])
     else:
         titre = rng.choice([f"{nb_kills} kills, zéro pitié", "Ça clique tout seul", "Session propre"])
     if o.armes and len(o.armes) == 1:
@@ -69,8 +74,13 @@ def legende(segments: list, o, graine: int = 0) -> str:
         titre = rng.choice(["Mes pires morts de la semaine", "Comment je suis mort (encore)"])
     emoji = rng.choice(["🔥", "😤", "💀", "🎯", "⚡"])
 
-    tags = list(HASHTAGS_JEU.get(_cle(jeu), [f"#{_cle(jeu)}"] if jeu else []))
-    for mot, tag in (("ace", "#ace"), ("4k", "#4k"), ("one tap", "#onetap"), ("clutch", "#clutch")):
+    try:
+        from jeux import hashtags as hashtags_jeu
+        tags = hashtags_jeu(jeu) if jeu else []
+    except Exception:
+        tags = list(HASHTAGS_JEU.get(_cle(jeu), [f"#{_cle(jeu)}"] if jeu else []))
+    for mot, tag in (("ace", "#ace"), ("4k", "#4k"), ("one tap", "#onetap"), ("clutch", "#clutch"),
+                     ("headshot", "#headshot")):
         if mot in etiquettes:
             tags.append(tag)
     if agent:
@@ -91,5 +101,6 @@ def legende(segments: list, o, graine: int = 0) -> str:
     lignes = [f"{titre} {emoji}", "", " ".join(propres[:10])]
     if o.format == "youtube":
         lignes = [f"{titre} {emoji} | {jeu or 'Montage'}", "",
-                  f"{nb_kills} kills, montés automatiquement sur la musique.", "", " ".join(propres[:12])]
+                  (f"{nb_kills} kills, montés" if etiquettes.strip() else "Mes meilleurs moments, montés")
+                  + " automatiquement sur la musique.", "", " ".join(propres[:12])]
     return "\n".join(lignes) + "\n"

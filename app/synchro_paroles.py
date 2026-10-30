@@ -54,9 +54,10 @@ DEPOTS = {
     "small": "Systran/faster-whisper-small",
     "medium": "Systran/faster-whisper-medium",
     "large-v3-turbo": "mobiuslabsgmbh/faster-whisper-large-v3-turbo",
+    "mobilesam": "Acly/MobileSAM",     # découpage de l'arme (arme_ia.py), MIT / Apache-2.0
 }
 # Taille du téléchargement (Mo), pour afficher un pourcentage.
-TAILLES_MO = {"base": 145, "small": 484, "medium": 1530, "large-v3-turbo": 1620}
+TAILLES_MO = {"base": 145, "small": 484, "medium": 1530, "large-v3-turbo": 1620, "mobilesam": 45}
 FICHIERS = ["config.json", "preprocessor_config.json", "model.bin", "tokenizer.json", "vocabulary.*"]
 
 SR = 16000
@@ -95,10 +96,14 @@ def _taille_dossier(d: Path) -> int:
 
 
 def chemin_modele(nom: str = MODELE, log=print, telecharger: bool = True,
-                  cache_hf: bool = True) -> str | None:
+                  cache_hf: bool = True, fichiers: list[str] | None = None, revision: str | None = None,
+                  quoi: str = "synchro IA") -> str | None:
     """Dossier du modèle CTranslate2. Cherche dans DONNEES/modeles, puis dans le cache HuggingFace
     habituel (déjà là sur un PC de dev), sinon le télécharge dans DONNEES/modeles avec la progression
-    dans le journal. Retourne None (avec un message clair) si c'est impossible."""
+    dans le journal. Retourne None (avec un message clair) si c'est impossible.
+    Sert aussi à d'autres modèles (arme_ia.py) : `fichiers` (motifs à télécharger), `revision`
+    (commit figé du dépôt) et `quoi` (nom affiché dans le journal)."""
+    fichiers = fichiers or FICHIERS
     os.environ.setdefault("HF_HUB_DISABLE_PROGRESS_BARS", "1")      # pas de console dans l'exe
     os.environ.setdefault("HF_HUB_DISABLE_SYMLINKS_WARNING", "1")
     os.environ.setdefault("HF_HUB_VERBOSITY", "error")
@@ -111,14 +116,15 @@ def chemin_modele(nom: str = MODELE, log=print, telecharger: bool = True,
     endroits = [str(MODELES)] + ([None] if cache_hf else [])
     for cache_dir in endroits:
         try:
-            return snapshot_download(depot, cache_dir=cache_dir, allow_patterns=FICHIERS, local_files_only=True)
+            return snapshot_download(depot, cache_dir=cache_dir, allow_patterns=fichiers, revision=revision,
+                                     local_files_only=True)
         except Exception:
             pass
     if not telecharger or time.time() - _echecs.get(nom, 0) < 600:
         return None          # pas de nouvel essai réseau avant 10 min (montages en série)
     MODELES.mkdir(parents=True, exist_ok=True)
     total_mo = TAILLES_MO.get(nom, 0)
-    log(f"  paroles : téléchargement du modèle de synchro IA « {nom} » (~{total_mo} Mo, une seule fois)…")
+    log(f"  paroles : téléchargement du modèle de {quoi} « {nom} » (~{total_mo} Mo, une seule fois)…")
     dossier = MODELES / ("models--" + depot.replace("/", "--"))
     fini = threading.Event()
     depart = _taille_dossier(dossier) if dossier.exists() else 0
@@ -140,15 +146,15 @@ def chemin_modele(nom: str = MODELE, log=print, telecharger: bool = True,
     th.start()
     t0 = time.time()
     try:
-        chemin = snapshot_download(depot, cache_dir=str(MODELES), allow_patterns=FICHIERS)
+        chemin = snapshot_download(depot, cache_dir=str(MODELES), allow_patterns=fichiers, revision=revision)
         fini.set()
         log(f"  paroles : modèle IA téléchargé en {time.time() - t0:.0f} s")
         return chemin
     except Exception as e:
         fini.set()
         _echecs[nom] = time.time()
-        log("  paroles : impossible de télécharger le modèle de synchro IA "
-            f"({type(e).__name__}). Vérifie ta connexion internet : la synchro IA se fera au prochain "
+        log(f"  paroles : impossible de télécharger le modèle de {quoi} "
+            f"({type(e).__name__}). Vérifie ta connexion internet : la {quoi} se fera au prochain "
             "montage.")
         return None
 
